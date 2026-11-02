@@ -21,6 +21,8 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Find conversation history for non-default OpenCode install channels by
+  reading their per-channel databases as well as the default database.
 - Show the whole OpenCode question in its answer card instead of only the last
   wrapped line.
 - Accept an answer to a second approval dialog shown while the agent stays

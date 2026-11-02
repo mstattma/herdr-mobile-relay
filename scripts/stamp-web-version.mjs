@@ -8,7 +8,9 @@ if (!filename || !version || !revision) {
 }
 
 const metadata = JSON.parse(await readFile(filename, 'utf8'));
-metadata.version = version;
+// The descriptor and browser build use the core version; deployment identity
+// must retain the full fork version and exact commit.
+metadata.version = version.split('+', 1)[0];
 metadata.release_version = version;
 metadata.revision = revision;
 const serialized = `${JSON.stringify(metadata)}\n`;

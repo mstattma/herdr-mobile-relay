@@ -1,5 +1,13 @@
 # Herdr Mobile Relay
 
+This is the public [mstattma fork](https://github.com/mstattma/herdr-mobile-relay)
+of [0cv/herdr-mobile-relay](https://github.com/0cv/herdr-mobile-relay).
+The `mst` branch currently carries **0.24.0+mst.1**. See
+[Fork Builds](docs/mst.md) for local build instructions and the patch list.
+The setup and update instructions below describe upstream releases; installing
+an upstream update replaces the fork's changes. Upstream update notices remain
+enabled, and nothing installs automatically.
+
 [![check](https://github.com/0cv/herdr-mobile-relay/actions/workflows/check.yml/badge.svg)](https://github.com/0cv/herdr-mobile-relay/actions/workflows/check.yml)
 
 Control [Herdr](https://herdr.dev) agents from your phone. Each Linux or macOS
