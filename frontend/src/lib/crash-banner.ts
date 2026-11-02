@@ -7,8 +7,17 @@
 const seen = new Set<string>();
 let banner: HTMLElement | null = null;
 
+/**
+ * Same-origin asset URLs fill a stack frame with the origin and a 64-character
+ * content hash, so a short report held only the first two frames. Keep the
+ * function names and positions, which map back onto the deployed bundle.
+ */
+export function compactStack(message: string): string {
+  return message.replace(/https?:\/\/[^\s()]*\/(?:assets\/)?([A-Za-z_-]+)[-.][0-9a-f]{16,}\.js/g, '$1');
+}
+
 function show(message: string): void {
-  const text = message.trim().slice(0, 300);
+  const text = compactStack(message).trim().slice(0, 900);
   if (!text || seen.has(text) || seen.size >= 3) return;
   if (text.includes('ResizeObserver loop')) return;
   seen.add(text);

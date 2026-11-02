@@ -5,6 +5,11 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- Keep every frame of an app error report readable by dropping the origin and
+  asset hash from stack frames.
+
 ## [0.24.0] - 2026-11-02
 
 ### Added
