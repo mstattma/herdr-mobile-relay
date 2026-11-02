@@ -28,6 +28,8 @@ project follows [Semantic Versioning](https://semver.org/).
   reporting that a different response was already submitted.
 - Re-enable approval buttons as soon as a follow-up dialog replaces the one
   just answered.
+- Keep every frame of an app error report readable by dropping the origin and
+  asset hash from stack frames.
 
 ## [0.24.0] - 2026-11-02
 
