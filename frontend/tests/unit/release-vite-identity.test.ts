@@ -51,7 +51,7 @@ function identity(source: string | Uint8Array) {
 describe('actual Vite release identity', () => {
   it('publishes canonical and final identities with exact descriptor and version projections', () => {
     const manifest = readFileSync(new URL('../../../herdr-plugin.toml', import.meta.url), 'utf8');
-    const productVersion = manifest.match(/^version = "([0-9]+\.[0-9]+\.[0-9]+)"$/m)?.[1];
+    const productVersion = manifest.match(/^version = "([0-9]+\.[0-9]+\.[0-9]+)(?:\+[0-9A-Za-z.-]+)?"$/m)?.[1];
     if (!productVersion) throw new Error('Missing current product version fixture input');
     const originalJavascript = 'const builds=["__HERDR_BUILD_ID__","__HERDR_BUILD_ID__"];const snow="雪🌿";const color="--primary-foreground";\n';
     const canonicalJavascript = 'const builds=["__HERDR_BUILD_ID__","__HERDR_BUILD_ID__"];const snow="雪🌿";const color="--pf";\n';
