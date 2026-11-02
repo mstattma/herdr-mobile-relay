@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -48,7 +49,6 @@ func (d *Dispatcher) handleApproval(ctx context.Context, receivedAt time.Time, r
 	if payload.Total < 2 || payload.Total > 20 || payload.Index < 0 || payload.Index >= payload.Total {
 		return d.fail(requestID, "approval", paneID, "Approval choice is no longer available")
 	}
-	ledgerKey := approvalLedgerKey(paneID, payload.EventID)
 	payloadHash := hashPayload(payload)
 	agent, ok := d.state.Agent(paneID)
 	if ok && agent.Status == "blocked" &&
@@ -62,6 +62,9 @@ func (d *Dispatcher) handleApproval(ctx context.Context, receivedAt time.Time, r
 			agent.Options[payload.Index] != payload.Choice) {
 		return d.fail(requestID, "approval", paneID, "Approval choices are no longer available")
 	}
+	// A live dialog starts (or joins) its answer round; a retry after the pane
+	// stopped waiting only looks up the round it was answered in.
+	ledgerKey := d.approvalRoundKey(paneID, payload.EventID, payload.Fingerprint, ok && agent.Status == "blocked")
 	if !ok || agent.Status != "blocked" {
 		replay, found, replayErr := d.scheduler.ReplayLedger(ledgerKey, payloadHash)
 		switch {
@@ -116,7 +119,7 @@ func (d *Dispatcher) handleApproval(ctx context.Context, receivedAt time.Time, r
 		if err := d.herdr.SendKeys(
 			effectCtx,
 			paneID,
-			approvalKeys(payload.Index, classification.ApprovalFocus),
+			question.ApprovalKeys(classification, payload.Index),
 		); err != nil {
 			return EffectResult{Result: d.failErr(requestID, "approval", paneID, err)}
 		}
@@ -133,26 +136,12 @@ func (d *Dispatcher) handleApproval(ctx context.Context, receivedAt time.Time, r
 	d.recordActivity("approval", "approved", fmt.Sprintf("Approved option %d", payload.Index+1), paneID, requestID)
 	d.wake()
 	d.startWatcher(func(ctx context.Context) {
-		d.watchApproval(ctx, requestID, paneID, payload.EventID, uint64(generation))
+		d.watchApproval(ctx, requestID, paneID, payload.EventID, payload.Fingerprint, ledgerKey, uint64(generation))
 	})
 	return result
 }
 
-func approvalKeys(target, current int) []string {
-	distance := target - current
-	key := "Down"
-	if distance < 0 {
-		key = "Up"
-		distance = -distance
-	}
-	keys := make([]string, 0, distance+1)
-	for range distance {
-		keys = append(keys, key)
-	}
-	return append(keys, "Enter")
-}
-
-func (d *Dispatcher) watchApproval(parent context.Context, requestID, paneID, eventID string, generation uint64) {
+func (d *Dispatcher) watchApproval(parent context.Context, requestID, paneID, eventID, fingerprint, ledgerKey string, generation uint64) {
 	ctx, cancel := context.WithTimeout(parent, approvalPollTimeout)
 	defer cancel()
 	ticker := time.NewTicker(approvalPollInterval)
@@ -162,7 +151,7 @@ func (d *Dispatcher) watchApproval(parent context.Context, requestID, paneID, ev
 		select {
 		case <-ctx.Done():
 			d.commitAndBroadcastPhase(
-				approvalLedgerKey(paneID, eventID),
+				ledgerKey,
 				generation,
 				requestID,
 				"approval",
@@ -177,8 +166,9 @@ func (d *Dispatcher) watchApproval(parent context.Context, requestID, paneID, ev
 			agent, ok := d.state.Agent(paneID)
 			if !ok || agent.Status != "blocked" || agent.BlockedEventID == "" || agent.BlockedEventID != eventID {
 				phase = "confirmed"
+				d.finishApprovalRound(paneID, eventID, fingerprint)
 				d.commitAndBroadcastPhase(
-					approvalLedgerKey(paneID, eventID),
+					ledgerKey,
 					generation,
 					requestID,
 					"approval",
@@ -187,10 +177,13 @@ func (d *Dispatcher) watchApproval(parent context.Context, requestID, paneID, ev
 				)
 				return
 			}
-			if agent.AttentionKind != question.AttentionApproval {
+			// A follow-up dialog under the same blocked event (for example
+			// OpenCode's "Always allow" confirmation) means the answer landed.
+			if agent.AttentionKind != question.AttentionApproval || agent.ApprovalFingerprint != fingerprint {
 				phase = "confirmed"
+				d.finishApprovalRound(paneID, eventID, fingerprint)
 				d.commitAndBroadcastPhase(
-					approvalLedgerKey(paneID, eventID),
+					ledgerKey,
 					generation,
 					requestID,
 					"approval",
@@ -627,8 +620,61 @@ func (d *Dispatcher) finishQuestionWatch(
 	}
 }
 
-func approvalLedgerKey(paneID, eventID string) string {
-	return "approval\x00" + paneID + "\x00" + eventID
+// approvalLedgerKey identifies one answer to one approval dialog. One blocked
+// event can show several dialogs in sequence, and the same dialog can return
+// (OpenCode redraws the permission after "Cancel" on its "Always allow"
+// confirmation or "Back" on "Reject permission"), so the identity is the
+// dialog fingerprint plus the answer round in which it is shown.
+func approvalLedgerKey(paneID, eventID, fingerprint string, round int) string {
+	return "approval\x00" + paneID + "\x00" + eventID + "\x00" + fingerprint + "\x00" + strconv.Itoa(round)
+}
+
+type approvalRound struct {
+	fingerprint string
+	round       int
+	open        bool
+}
+
+const maxApprovalRounds = 4096
+
+// approvalRoundKey returns the ledger key for an answer to the dialog. Every
+// client answering the same displayed dialog shares one round, which keeps
+// duplicate answers to a single dispatch. A live dialog opens a new round when
+// a different dialog was answered last under this blocked event, or when the
+// previous answer to this dialog was observed to land; a retry (live=false)
+// only looks up the current round.
+func (d *Dispatcher) approvalRoundKey(paneID, eventID, fingerprint string, live bool) string {
+	d.approvalRoundsMu.Lock()
+	defer d.approvalRoundsMu.Unlock()
+	if d.approvalRounds == nil {
+		d.approvalRounds = make(map[string]approvalRound)
+	}
+	key := paneID + "\x00" + eventID
+	current, exists := d.approvalRounds[key]
+	if live && (current.fingerprint != fingerprint || !current.open) {
+		if !exists && len(d.approvalRounds) >= maxApprovalRounds {
+			clear(d.approvalRounds)
+		}
+		current = approvalRound{fingerprint: fingerprint, round: current.round + 1, open: true}
+		d.approvalRounds[key] = current
+	}
+	round := current.round
+	if current.fingerprint != fingerprint {
+		round = 0
+	}
+	return approvalLedgerKey(paneID, eventID, fingerprint, round)
+}
+
+// finishApprovalRound records that the answer to this dialog landed, so the
+// same dialog shown again later is a new question.
+func (d *Dispatcher) finishApprovalRound(paneID, eventID, fingerprint string) {
+	d.approvalRoundsMu.Lock()
+	defer d.approvalRoundsMu.Unlock()
+	key := paneID + "\x00" + eventID
+	if current, ok := d.approvalRounds[key]; ok && current.fingerprint == fingerprint {
+		current.open = false
+		d.approvalRounds[key] = current
+	}
 }
 
 func questionOperationLedgerKey(action, paneID, interactionID, requestID string) string {

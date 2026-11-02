@@ -285,7 +285,7 @@ func TestApprovalKeysNavigateToEveryRowWithEnter(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			if got := approvalKeys(test.target, test.current); !reflect.DeepEqual(got, test.want) {
+			if got := question.ApprovalKeys(question.Classification{ApprovalFocus: test.current}, test.target); !reflect.DeepEqual(got, test.want) {
 				t.Fatalf("approval keys = %#v, want %#v", got, test.want)
 			}
 		})

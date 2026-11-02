@@ -590,6 +590,9 @@ class RelayStore {
   private slashCommandCache = new Map<string, SlashCommandCacheEntry>();
   private pendingSlashCommands = new Map<string, PendingSlashCommands>();
   private respondingTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  // Approval dialog each pending response answered; a different dialog on the
+  // same blocked pane (for example a follow-up confirmation) ends the wait.
+  private respondingFingerprints = new Map<string, string>();
   private reconnectAttempts = new Map<string, number>();
   private deferredPairingRelays = new Set<string>();
   private reconnectEnabled = true;
@@ -1830,21 +1833,26 @@ class RelayStore {
   }
 
   private reconcileResponding(): void {
-    const blocked = new Set(this.agentsValue.filter((agent) => agentStatusGroup(agent) === 'blocked').map((agent) => agent.pane_id));
+    const blockedAgents = new Map(this.agentsValue.filter((agent) => agentStatusGroup(agent) === 'blocked').map((agent) => [agent.pane_id, agent]));
     let changed = false;
     for (const paneId of this.respondingValue) {
-      if (!blocked.has(paneId)) {
+      const answered = this.respondingFingerprints.get(paneId);
+      const current = blockedAgents.get(paneId);
+      if (!current || (answered !== undefined && (current.approval_fingerprint || '') !== answered)) {
         const timer = this.respondingTimers.get(paneId);
         if (timer) clearTimeout(timer);
         this.respondingTimers.delete(paneId);
         this.respondingValue.delete(paneId);
+        this.respondingFingerprints.delete(paneId);
         changed = true;
       }
     }
     if (changed) this.responding.set(new Set(this.respondingValue));
   }
 
-  markResponding(paneId: string): void {
+  markResponding(paneId: string, approvalFingerprint?: string): void {
+    if (approvalFingerprint) this.respondingFingerprints.set(paneId, approvalFingerprint);
+    else this.respondingFingerprints.delete(paneId);
     this.respondingValue.add(paneId);
     this.responding.set(new Set(this.respondingValue));
     const previous = this.respondingTimers.get(paneId);
@@ -1852,6 +1860,7 @@ class RelayStore {
     const timer = setTimeout(() => {
       if (this.respondingTimers.get(paneId) !== timer) return;
       this.respondingTimers.delete(paneId);
+      this.respondingFingerprints.delete(paneId);
       if (!this.respondingValue.delete(paneId)) return;
       this.responding.set(new Set(this.respondingValue));
     }, 10_000);
@@ -1863,6 +1872,7 @@ class RelayStore {
     if (timer) clearTimeout(timer);
     this.respondingTimers.delete(paneId);
     this.respondingValue.delete(paneId);
+    this.respondingFingerprints.delete(paneId);
     this.responding.set(new Set(this.respondingValue));
   }
 
@@ -2825,7 +2835,7 @@ class RelayStore {
       this.showToast('This approval no longer has an exact verified identity.', true);
       return false;
     }
-    this.markResponding(agent.pane_id);
+    this.markResponding(agent.pane_id, agent.approval_fingerprint);
     const owner = this.connectionsValue.get(agent.relay_id);
     try {
       const result = await this.sendToAgent(agent, {

@@ -4,14 +4,18 @@
   import KeyboardIcon from '$components/ui/KeyboardIcon.svelte';
   import { agentNeedsResponse, attentionKind, approvalButtonTone, approvalOptions, questionInteraction } from '$lib/agents';
   import { relayStore } from '$lib/store';
+  import { stripAnsi } from '$lib/terminal';
   import { AppReloadHeld, importOrReload } from '$lib/updates';
   import type { Agent } from '$lib/types';
 
-  let { agent, readOnly = false, responding = false, blocked = false }:
-    { agent: Agent; readOnly?: boolean; responding?: boolean; blocked?: boolean } = $props();
+  let { agent, readOnly = false, responding = false, blocked = false, showRequest = false }:
+    { agent: Agent; readOnly?: boolean; responding?: boolean; blocked?: boolean; showRequest?: boolean } = $props();
   const pending = $derived(!readOnly && agentNeedsResponse(agent));
   const interaction = $derived(questionInteraction(agent));
   const options = $derived(approvalOptions(agent));
+  // The full request (for example an OpenCode permission with its patterns),
+  // kept line by line; the agent list only shows a short preview.
+  const approvalText = $derived(stripAnsi(String(agent.prompt || '')).replace(/\n{3,}/g, '\n\n').trim());
   let destroyed = false;
   onDestroy(() => { destroyed = true; });
   const questionPending = () => !destroyed && pending && attentionKind(agent) === 'question';
@@ -26,6 +30,7 @@
     <p role="alert">{#if error instanceof AppReloadHeld}{error.message}{:else}Question controls could not load. In Terminal, tap <KeyboardIcon label="Keyboard" inline /> to type an answer.{/if}</p>
   {/await}
 {:else if pending && attentionKind(agent) === 'approval'}
+  {#if showRequest && approvalText}<pre class="approval-prompt" aria-label="Approval request">{approvalText}</pre>{/if}
   <div class="quick-actions" aria-label="Approval choices">
     {#each options as option, index (`${index}:${option}`)}
       <Button disabled={responding || blocked}

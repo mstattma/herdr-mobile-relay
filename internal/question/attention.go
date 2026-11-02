@@ -19,15 +19,18 @@ const (
 )
 
 type Classification struct {
-	Kind             AttentionKind
-	Prompt           string
-	Command          string
-	Options          []string
-	ApprovalFocus    int
-	Interaction      *Interaction
-	QuestionLayout   bool
-	ApprovalIdentity string
-	approvalSource   string
+	Kind          AttentionKind
+	Prompt        string
+	Command       string
+	Options       []string
+	ApprovalFocus int
+	// ApprovalNavigation selects how ApprovalKeys reaches an option; empty is
+	// the vertical numbered menu.
+	ApprovalNavigation string
+	Interaction        *Interaction
+	QuestionLayout     bool
+	ApprovalIdentity   string
+	approvalSource     string
 }
 
 func ApprovalFingerprint(classification Classification) string {
@@ -137,6 +140,19 @@ func Classify(text, agent string) Classification {
 				Command:        interaction.Question,
 				Interaction:    interaction,
 				QuestionLayout: true,
+			}
+		}
+		if strings.Contains(strings.ToLower(agent), "opencode") {
+			if dialog := parseOpenCodeApproval(text); dialog != nil {
+				return Classification{
+					Kind:               AttentionApproval,
+					Prompt:             dialog.prompt,
+					Command:            dialog.command,
+					Options:            dialog.options,
+					ApprovalFocus:      dialog.focus,
+					ApprovalNavigation: dialog.navigation,
+					approvalSource:     dialog.source,
+				}
 			}
 		}
 		if options, focus, command := liveApprovalDetails(text, agent); len(options) > 0 {
