@@ -93,6 +93,9 @@ func VerifyWebDescriptor(filesystem fs.FS, expectedVersion string) (WebDescripto
 	if !webVersionPattern.MatchString(descriptor.Version) {
 		return WebDescriptor{}, errors.New("web release descriptor version is invalid")
 	}
+	// The web bundle carries the core version; fork builds add +build metadata
+	// only to the relay version.
+	expectedVersion, _, _ = strings.Cut(expectedVersion, "+")
 	if expectedVersion != "" && descriptor.Version != expectedVersion {
 		return WebDescriptor{}, fmt.Errorf("web release version %q does not match %q", descriptor.Version, expectedVersion)
 	}

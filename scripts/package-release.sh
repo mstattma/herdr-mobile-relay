@@ -22,7 +22,9 @@ OUTPUT_DIR=${3:-"$REPO_DIR/dist/release"}
 case "$VERSION" in
     v*) VERSION=${VERSION#v} ;;
 esac
-SOURCE_VERSION=$(sed -n 's/^version = "\([0-9.]*\)"$/\1/p' "$REPO_DIR/herdr-plugin.toml")
+SOURCE_VERSION=$(sed -n 's/^version = "\([0-9.]*\(+[0-9A-Za-z.-]*\)\{0,1\}\)"$/\1/p' "$REPO_DIR/herdr-plugin.toml")
+# The web bundle carries the core version; +build metadata stays on the relay.
+WEB_VERSION=${VERSION%%+*}
 [ "$VERSION" = "$SOURCE_VERSION" ] || {
     echo "requested release version $VERSION does not match herdr-plugin.toml $SOURCE_VERSION" >&2
     exit 1
@@ -67,7 +69,7 @@ for TARGET in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64; do
     # Validate before stamping the relay revision: stamping must never turn a
     # bundle for another product version into a candidate for this release.
     bun "$REPO_DIR/frontend/scripts/validate-build.mjs" "$STAGE/web"
-    bun "$SCRIPT_DIR/stamp-web-version.mjs" "$STAGE/web/version.json" "$VERSION" "$REVISION"
+    bun "$SCRIPT_DIR/stamp-web-version.mjs" "$STAGE/web/version.json" "$WEB_VERSION" "$REVISION"
     cp "$REPO_DIR/LICENSE" "$STAGE/LICENSE"
     cp "$REPO_DIR/README.md" "$STAGE/README.md"
     cp -R "$REPO_DIR/relay/pi-command-bridge" "$STAGE/relay/pi-command-bridge"

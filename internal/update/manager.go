@@ -39,7 +39,9 @@ var appDeployEnvironmentKeys = [...]string{
 
 var sweepWorkers = launchd.SweepWorkers
 
-var semverPattern = regexp.MustCompile(`^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$`)
+// Build metadata (`+mst.N` for fork builds) is accepted and, as semver
+// specifies, ignored when comparing versions.
+var semverPattern = regexp.MustCompile(`^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:\+[0-9A-Za-z.-]+)?$`)
 
 type Manager struct {
 	releaseRoot string

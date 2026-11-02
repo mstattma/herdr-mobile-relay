@@ -31,6 +31,15 @@ func TestNewerVersion(t *testing.T) {
 	}
 }
 
+func TestNewerVersionIgnoresForkBuildMetadata(t *testing.T) {
+	if NewerVersion("0.24.0", "0.24.0+mst.1") ||
+		!NewerVersion("0.24.1", "0.24.0+mst.3") ||
+		!NewerVersion("0.25.0", "0.24.0+mst.1") ||
+		NewerVersion("0.24.0+bad_build", "0.23.0") {
+		t.Fatal("build metadata was not ignored")
+	}
+}
+
 func TestUpdateWorkerJobForwardsAppDeploymentConfiguration(t *testing.T) {
 	values := map[string]string{
 		"HERDR_APP_DEPLOY_ORIGIN":        "https://app.example.test",

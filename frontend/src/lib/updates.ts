@@ -77,7 +77,8 @@ let checking: Promise<AppUpdateStatus> | null = null;
 let relayUpstreamVersion = APP_VERSION;
 
 export function semverTuple(value: string): [number, number, number] | null {
-  const match = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.exec(value);
+  // Build metadata (`+mst.N` for fork builds) is accepted and ignored.
+  const match = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:\+[0-9A-Za-z.-]+)?$/.exec(value);
   return match ? [Number(match[1]), Number(match[2]), Number(match[3])] : null;
 }
 

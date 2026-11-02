@@ -54,6 +54,9 @@ describe('release updates', () => {
     expect(semverTuple('1.2.3')).toEqual([1, 2, 3]);
     expect(semverTuple('1.2')).toBeNull();
     expect(semverTuple('01.2.3')).toBeNull();
+    expect(semverTuple('0.24.0+mst.1')).toEqual([0, 24, 0]);
+    expect(newerVersion('0.24.0', '0.24.0+mst.1')).toBe(false);
+    expect(newerVersion('0.24.1', '0.24.0+mst.1')).toBe(true);
     expect(newerVersion('0.8.0', '0.7.9')).toBe(true);
     expect(newerVersion('0.7.10', '0.8.0')).toBe(false);
     expect(newerVersion('0.7.0', '0.7.0')).toBe(false);

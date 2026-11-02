@@ -8,7 +8,7 @@ import { validatePagesHeaders, validatePagesRedirects } from './pages-policy.ts'
 
 const root = resolve(process.argv[2] || 'dist');
 const pluginManifest = await readFile(new URL('../../herdr-plugin.toml', import.meta.url), 'utf8');
-const productVersion = pluginManifest.match(/^version = "([0-9]+\.[0-9]+\.[0-9]+)"$/m)?.[1];
+const productVersion = pluginManifest.match(/^version = "([0-9]+\.[0-9]+\.[0-9]+)(?:\+[0-9A-Za-z.-]+)?"$/m)?.[1];
 if (!productVersion) throw new Error('herdr-plugin.toml must declare a MAJOR.MINOR.PATCH version');
 const required = [
   '_headers',

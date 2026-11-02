@@ -8,7 +8,7 @@ import { assetIdentity as digest } from './scripts/asset-identity.mjs';
 import { pagesHeaders } from './scripts/pages-policy.ts';
 
 const manifest = readFileSync(fileURLToPath(new URL('../herdr-plugin.toml', import.meta.url)), 'utf8');
-const productVersion = manifest.match(/^version = "([0-9]+\.[0-9]+\.[0-9]+)"$/m)?.[1];
+const productVersion = manifest.match(/^version = "([0-9]+\.[0-9]+\.[0-9]+)(?:\+[0-9A-Za-z.-]+)?"$/m)?.[1];
 if (!productVersion) throw new Error('herdr-plugin.toml must declare a MAJOR.MINOR.PATCH version');
 const versionMetadata = `${JSON.stringify({ version: productVersion, assets: versions.assets })}\n`;
 const BUILD_ID_MARKER = '__HERDR_BUILD_ID__';
