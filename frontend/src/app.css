@@ -723,6 +723,8 @@ textarea { min-height: 6.5rem; resize: vertical; }
 .upload-status { color: var(--success); font-size: .7rem; margin: -.2rem .75rem .45rem; }
 .draft-status { color: var(--muted); font-size: .7rem; margin: 0 .75rem .25rem; }
 .quick-actions { border-top: 1px solid var(--border); padding: .55rem; }
+.approval-prompt { border-top: 1px solid var(--border); color: var(--foreground); font-family: ui-monospace, monospace; font-size: .74rem; line-height: 1.45; margin: 0; max-height: min(40dvh, 22rem); overflow: auto; overflow-wrap: anywhere; padding: .55rem .7rem; white-space: pre-wrap; }
+.approval-prompt + .quick-actions { border-top: 0; }
 .quick-actions .button { flex: 1; }
 .term-keys { align-items: center; border-top: 1px solid var(--border); display: flex; gap: .2rem; padding: .4rem .35rem; }
 .term-keys .button { flex-shrink: 0; font-size: .72rem; height: 2.15rem; padding: 0 .4rem; white-space: nowrap; }

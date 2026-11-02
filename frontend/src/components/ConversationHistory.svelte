@@ -867,7 +867,7 @@
     {:else if !readOnly && delivery.pending}
       <p role="status">Waiting for terminal input delivery.</p>
     {/if}
-    <AgentInteraction {agent} {readOnly} responding={responding.has(agent.pane_id)} blocked={inputBlocked} />
+    <AgentInteraction {agent} {readOnly} responding={responding.has(agent.pane_id)} blocked={inputBlocked} showRequest />
     {#key JSON.stringify(targetRefForAgent(agent))}
       <PromptComposer {agent} {frame} {readOnly}
         dispatchBlocked={inputBlocked ? 'Check terminal input delivery in Terminal before sending.' : draftState.secretReady ? '' : dispatchBlocked}

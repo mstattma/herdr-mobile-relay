@@ -5,6 +5,25 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Show OpenCode permission requests, including those raised by subagent
+  sessions, as approval cards with the full request text (title, target
+  session, and patterns) and Allow once, Allow always, and Reject buttons. The
+  follow-up "Always allow" confirmation and the "Reject permission" prompt are
+  cards too. Cards appear only when the dialog and its focused button are
+  unambiguous; otherwise the pane stays "needs inspection".
+- Show an OpenCode question call with no questions as an approval card with
+  Submit and Dismiss instead of leaving the agent blocked without controls.
+
+### Fixed
+
+- Accept an answer to a second approval dialog shown while the agent stays
+  blocked, and to a dialog shown again after **Cancel** or **Back**, instead of
+  reporting that a different response was already submitted.
+- Re-enable approval buttons as soon as a follow-up dialog replaces the one
+  just answered.
+
 ## [0.24.0] - 2026-11-02
 
 ### Added

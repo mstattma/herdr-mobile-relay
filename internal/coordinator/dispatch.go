@@ -63,6 +63,8 @@ type Dispatcher struct {
 	watcherCancel    context.CancelFunc
 	watcherClosed    bool
 	watcherWG        sync.WaitGroup
+	approvalRoundsMu sync.Mutex
+	approvalRounds   map[string]approvalRound
 
 	// testGates is a deterministic pre-admission hook retained for the existing
 	// package tests. Production never creates an entry and never takes a lock.
