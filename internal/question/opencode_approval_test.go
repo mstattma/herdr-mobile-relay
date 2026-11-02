@@ -298,3 +298,25 @@ func TestOpenCodeReviewWithAnswersIsNotEmptyQuestion(t *testing.T) {
 		t.Fatalf("review with answers became an empty-question approval: %+v", c)
 	}
 }
+
+func TestOpenCodeWrappedQuestionKeepsEveryRow(t *testing.T) {
+	fixture := attentionFixture(t, "opencode-single-question.ansi")
+	lines := strings.Split(fixture, "\n")
+	inserted := false
+	for index, line := range lines {
+		if strings.Contains(line, "What would you like to work on today?") {
+			first := strings.Replace(line, "What would you like to work on today?", "Before we start: the long context of this question", 1)
+			lines = append(lines[:index], append([]string{first}, lines[index:]...)...)
+			inserted = true
+			break
+		}
+	}
+	if !inserted {
+		t.Fatal("fixture question row not found")
+	}
+	interaction := Parse(strings.Join(lines, "\n"), "opencode")
+	want := "Before we start: the long context of this question What would you like to work on today?"
+	if interaction == nil || interaction.Question != want {
+		t.Fatalf("interaction = %+v", interaction)
+	}
+}

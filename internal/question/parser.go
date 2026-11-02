@@ -1396,6 +1396,12 @@ func parseQoderReview(lines []string, headerIndex, footerIndex, questionTotal in
 	return interaction
 }
 
+// Bounds for a live OpenCode question scraped from the pane.
+const (
+	openCodeMaxQuestionRows  = 40
+	openCodeMaxQuestionRunes = 4000
+)
+
 func parseOpenCode(text string) *Interaction {
 	rawLines := strings.Split(strings.ReplaceAll(text, "\r\n", "\n"), "\n")
 	lines := make([]string, len(rawLines))
@@ -1477,15 +1483,24 @@ func parseOpenCode(text string) *Interaction {
 	}
 
 	firstOption := rows[0].line
-	questionText := ""
+	// OpenCode wraps a long question across several rows; the dialog separates
+	// it from the tab bar and the options with blank rows, so the question is
+	// the contiguous block of rows directly above the first option.
+	var questionRows []string
 	for index := firstOption - 1; index >= 0; index-- {
 		candidate := strings.TrimSpace(lines[index])
 		if candidate == "" {
+			if len(questionRows) > 0 {
+				break
+			}
 			continue
 		}
-		questionText = compact(candidate, 1000)
-		break
+		questionRows = append([]string{candidate}, questionRows...)
+		if len(questionRows) >= openCodeMaxQuestionRows {
+			break
+		}
 	}
+	questionText := compact(strings.Join(questionRows, " "), openCodeMaxQuestionRunes)
 	if questionText == "" {
 		return nil
 	}

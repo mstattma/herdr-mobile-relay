@@ -15,11 +15,20 @@ export const maxPayloadChars = 2000;
  * retained answer also carries tools, the compact view projects them out
  * without mutating the recorded entry used by Full history.
  */
+/**
+ * Whether a recorded tool call is the agent asking the user a structured
+ * question: Claude's AskUserQuestion or OpenCode's question tool, which share
+ * the `{ questions: [{ question, header, options }] }` input shape.
+ */
+export function isQuestionTool(name: string | undefined): boolean {
+  return name === 'AskUserQuestion' || name === 'question';
+}
+
 export function conversationEntries(recorded: ConversationEntry[]): ConversationEntry[] {
   const conversation: ConversationEntry[] = [];
 
   // An AskUserQuestion is the agent talking to the user, not tool noise.
-  const isQuestion = (tool: ConversationTool) => tool.name === 'AskUserQuestion';
+  const isQuestion = (tool: ConversationTool) => isQuestionTool(tool.name);
   const answerOnly = (entry: ConversationEntry): ConversationEntry => {
     if (!entry.tools?.length) return entry;
     const answer = { ...entry };
@@ -126,7 +135,7 @@ export interface AskedQuestion {
   answer?: string;
 }
 
-/** Structured view of a Claude AskUserQuestion call, or null for any other payload. */
+/** Structured view of a Claude AskUserQuestion or OpenCode question call, or null for any other payload. */
 export function parseAskUserQuestion(input: string, output = ''): AskedQuestion[] | null {
   let parsed: unknown;
   try {
@@ -140,8 +149,9 @@ export function parseAskUserQuestion(input: string, output = ''): AskedQuestion[
   // `"Q"="A"` pairs counts; anything ambiguous leaves the raw output visible instead of guessing.
   const answers = new Map<string, string>();
   const trimmedOutput = output.trim();
-  // Claude Code 2.1.x writes `"Q"="A"` pairs without escaping, under one of two envelopes.
-  const prefix = ['Your questions have been answered:', 'The user answered:'].find((value) => trimmedOutput.startsWith(value));
+  // Claude Code 2.1.x writes `"Q"="A"` pairs without escaping, under one of two envelopes;
+  // OpenCode uses `User has answered your questions:` with the same pairs.
+  const prefix = ['Your questions have been answered:', 'The user answered:', 'User has answered your questions:'].find((value) => trimmedOutput.startsWith(value));
   if (prefix) {
     const pair = /\s*"([^"]*)"="([^"]*)"(,|\.|$)/y;
     pair.lastIndex = prefix.length;
@@ -166,7 +176,7 @@ export function parseAskUserQuestion(input: string, output = ''): AskedQuestion[
     return {
       question,
       header: text(entry.header),
-      multiSelect: entry.multiSelect === true,
+      multiSelect: entry.multiSelect === true || entry.multiple === true,
       options: options.map((option) => {
         const value = (option && typeof option === 'object' ? option : {}) as Record<string, unknown>;
         return { label: text(value.label), description: text(value.description) };
@@ -175,6 +185,16 @@ export function parseAskUserQuestion(input: string, output = ''): AskedQuestion[
     };
   });
   return questions.every((item) => item.question) ? questions : null;
+}
+
+/** Whether a question tool call carries an empty question list. */
+export function isEmptyQuestionInput(input: string | undefined): boolean {
+  try {
+    const questions = (JSON.parse(input || '') as { questions?: unknown } | null)?.questions;
+    return Array.isArray(questions) && questions.length === 0;
+  } catch {
+    return false;
+  }
 }
 
 /** Whether an option label matches the recorded answer (comma-joined for multi-select). */
@@ -189,7 +209,7 @@ export function pendingQuestionEntryId(entries: ConversationEntry[]): string | n
   for (let index = entries.length - 1; index >= 0; index -= 1) {
     const entry = entries[index];
     if (entry.role === 'user') return null;
-    if (entry.tools?.some((tool) => tool.name === 'AskUserQuestion' && !tool.output && !tool.error)) return entry.id;
+    if (entry.tools?.some((tool) => isQuestionTool(tool.name) && !tool.output && !tool.error)) return entry.id;
   }
   return null;
 }

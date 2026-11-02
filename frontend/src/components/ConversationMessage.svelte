@@ -1,6 +1,6 @@
 <script lang="ts">
   import ToolPayload from '$components/ToolPayload.svelte';
-  import { isChosenOption, parseAskUserQuestion } from '$lib/conversation';
+  import { isChosenOption, isEmptyQuestionInput, isQuestionTool, parseAskUserQuestion } from '$lib/conversation';
   import { safeMarkdownHtml } from '$lib/markdown';
   import type { ConversationTool } from '$lib/types';
   import type { ConversationMessageViewState } from '$lib/conversation-message-state';
@@ -76,8 +76,13 @@
 {#if tools.length}
   <div class="conversation-tools" aria-label="Tool activity">
     {#each tools as tool, index (`${tool.id || tool.name}:${index}`)}
-      {@const asked = tool.name === 'AskUserQuestion' && tool.input ? parseAskUserQuestion(tool.input, tool.error ? '' : tool.output) : null}
-      {#if asked}
+      {@const asked = isQuestionTool(tool.name) && tool.input ? parseAskUserQuestion(tool.input, tool.error ? '' : tool.output) : null}
+      {#if !asked && isQuestionTool(tool.name) && isEmptyQuestionInput(tool.input)}
+        <section class="conversation-ask" class:error={tool.error} aria-label="Question from the agent">
+          <p><strong>The agent asked an empty question.</strong></p>
+          <p>{tool.output || tool.error ? 'It was answered or dismissed.' : 'Waiting for an answer.'}</p>
+        </section>
+      {:else if asked}
         {@const waiting = !tool.output && !tool.error}
         <section class="conversation-ask" class:error={tool.error} aria-label="Question from the agent">
           {#each asked as item, itemIndex (itemIndex)}
