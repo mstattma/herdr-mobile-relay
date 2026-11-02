@@ -633,3 +633,29 @@ func TestOpenCodeUnknownLayoutFails(t *testing.T) {
 		t.Fatalf("unknown layout page = %#v, err = %v", page, err)
 	}
 }
+
+// OpenCode stores non-default install channels in opencode-<channel>.db next
+// to (or instead of) opencode.db.
+func TestOpenCodeReaderFindsSessionInChannelDatabase(t *testing.T) {
+	root := t.TempDir()
+	createOpenCodeFixture(t, filepath.Join(root, "opencode.db"), openCodeV1Schema)
+	sqlite := createOpenCodeFixture(t, filepath.Join(root, "opencode-1.2.3.db"), openCodeV2Schema+
+		`INSERT INTO session_v2(id,directory,title,agent) VALUES('ses_channel1','/work','Channel','build');`+
+		openCodeV2Message("m1", "ses_channel1", "assistant", 1, 1, `{"content":[{"type":"text","text":"from channel"}]}`))
+	if err := os.WriteFile(filepath.Join(root, "opencode-bad name.db"), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	openCodeFixtureReader(t, sqlite, root)
+	reader := newOpenCodeReader(t.TempDir())
+	reader.binary = sqlite
+	entries, _, _, metadata, code := reader.read("ses_channel1", "", defaultPageSize)
+	if code != "" || len(entries) != 1 || entries[0].Text != "from channel" || metadata.Title != "Channel" {
+		t.Fatalf("channel database result = %#v, metadata %#v, code %q", entries, metadata, code)
+	}
+	databases, _ := reader.databases()
+	for _, database := range databases {
+		if strings.Contains(database, "bad name") {
+			t.Fatalf("unexpected database %q", database)
+		}
+	}
+}

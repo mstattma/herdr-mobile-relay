@@ -81,13 +81,10 @@ func (r *openCodeReader) databases() ([]string, string) {
 	if exec := r.queryExec(); exec == nil || !exec.Ready() {
 		return nil, "source_unavailable"
 	}
-	roots := agentroots.OpenCodeData(r.home)
-	databases := make([]string, 0, len(roots))
-	for index, candidate := range agentroots.OpenCodeDBs(r.home) {
-		if index >= len(roots) {
-			break
-		}
-		if path := containedRegularFile(candidate, roots[index]); path != "" {
+	candidates := agentroots.OpenCodeDBs(r.home)
+	databases := make([]string, 0, len(candidates))
+	for _, candidate := range candidates {
+		if path := containedRegularFile(candidate.Path, candidate.Root); path != "" {
 			databases = append(databases, path)
 		}
 	}
