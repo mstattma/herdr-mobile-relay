@@ -32,6 +32,7 @@ package agentroots
 import (
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -114,16 +115,39 @@ func OpenCodeData(home string) []string {
 	return resolve(home, OpenCodeListEnv, "", filepath.Join(xdgData, "opencode"), "")
 }
 
-// OpenCodeDBs reports fixed database filenames under the configured OpenCode
-// data directories. A caller must still re-check containment and regular-file
-// status immediately before opening one.
-func OpenCodeDBs(home string) []string {
+// OpenCodeDatabase is one candidate OpenCode database and the data directory
+// it must stay contained in.
+type OpenCodeDatabase struct {
+	Root string
+	Path string
+}
+
+// openCodeChannelDBPattern matches the per-channel database OpenCode uses for
+// non-default install channels: opencode-<channel>.db, with the channel name
+// reduced to [A-Za-z0-9._-] (packages/core/src/database/database.ts).
+var openCodeChannelDBPattern = regexp.MustCompile(`^opencode-[A-Za-z0-9._-]+\.db$`)
+
+// OpenCodeDBs reports the database files under the configured OpenCode data
+// directories: opencode.db first, then any per-channel opencode-<channel>.db in
+// name order. Session IDs are unique across them, so readers try each in turn.
+// A caller must still re-check containment and regular-file status
+// immediately before opening one.
+func OpenCodeDBs(home string) []OpenCodeDatabase {
 	roots := OpenCodeData(home)
-	paths := make([]string, 0, len(roots))
+	databases := make([]OpenCodeDatabase, 0, len(roots))
 	for _, root := range roots {
-		paths = append(paths, filepath.Join(root, "opencode.db"))
+		databases = append(databases, OpenCodeDatabase{Root: root, Path: filepath.Join(root, "opencode.db")})
+		entries, err := os.ReadDir(root)
+		if err != nil {
+			continue
+		}
+		for _, entry := range entries {
+			if openCodeChannelDBPattern.MatchString(entry.Name()) {
+				databases = append(databases, OpenCodeDatabase{Root: root, Path: filepath.Join(root, entry.Name())})
+			}
+		}
 	}
-	return paths
+	return databases
 }
 
 // HermesData reports the directories containing Hermes Agent state databases.
