@@ -399,3 +399,58 @@ describe('ConversationMessage awaiting states', () => {
     expect(container.querySelector('li.chosen')).not.toBeNull();
   });
 });
+
+describe('OpenCode question tool', () => {
+  // Shape of an OpenCode 1.18 `question` tool call as stored in opencode.db.
+  const input = JSON.stringify({
+    questions: [{
+      question: 'Rebuilt the app. Please retry on the phone, then check (1) the agents view and (2) the live terminal. Results?',
+      header: 'Retry',
+      multiple: true,
+      options: [{ label: 'Connects', description: '' }, { label: 'Still crashes', description: '' }, { label: 'Terminal works', description: '' }],
+    }],
+  });
+  const output = 'User has answered your questions: "Rebuilt the app. Please retry on the phone, then check (1) the agents view and (2) the live terminal. Results?"="Connects, Terminal works". You can now continue with the user\'s answers in mind.';
+
+  it('parses the full question, multi-select flag and recorded answer', () => {
+    const [item] = parseAskUserQuestion(input, output)!;
+    expect(item.question).toContain('Please retry on the phone');
+    expect(item.multiSelect).toBe(true);
+    expect(item.answer).toBe('Connects, Terminal works');
+    expect(isChosenOption(item, 'Terminal works')).toBe(true);
+    expect(isChosenOption(item, 'Still crashes')).toBe(false);
+  });
+
+  it('keeps an OpenCode question turn in the compact conversation and marks it pending', () => {
+    const entries = [
+      { id: 'u1', role: 'user', text: 'go', timestamp: '' },
+      { id: 'a1', role: 'assistant', text: '', timestamp: '', tools: [{ id: 'q', name: 'question', input, output: '' }, { id: 'r', name: 'read', input: '{}', output: 'x' }] },
+    ] as ConversationEntry[];
+    const kept = conversationEntries(entries);
+    expect(kept.map((entry) => entry.id)).toEqual(['u1', 'a1']);
+    expect(kept[1].tools?.map((tool) => tool.name)).toEqual(['question']);
+    expect(pendingQuestionEntryId(entries)).toBe('a1');
+  });
+
+  it('renders the whole question text in the conversation card', () => {
+    render(ConversationMessage, {
+      text: '',
+      viewState: { tableOffsets: [], openTools: new Set<string>() },
+      tools: [{ id: 'q', name: 'question', input, output }],
+    });
+    expect(screen.getByText(/Please retry on the phone, then check \(1\) the agents view and \(2\) the live terminal\. Results\?/)).toBeTruthy();
+    expect(screen.getByText(/Answered: Connects, Terminal works/)).toBeTruthy();
+  });
+});
+
+describe('empty OpenCode question', () => {
+  it('renders an explicit empty-question card', () => {
+    render(ConversationMessage, {
+      text: '',
+      viewState: { tableOffsets: [], openTools: new Set<string>() },
+      tools: [{ id: 'q', name: 'question', input: '{"questions":[]}', output: '' }],
+    });
+    expect(screen.getByText('The agent asked an empty question.')).toBeTruthy();
+    expect(screen.getByText('Waiting for an answer.')).toBeTruthy();
+  });
+});

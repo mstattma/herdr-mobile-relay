@@ -15,9 +15,14 @@ project follows [Semantic Versioning](https://semver.org/).
   unambiguous; otherwise the pane stays "needs inspection".
 - Show an OpenCode question call with no questions as an approval card with
   Submit and Dismiss instead of leaving the agent blocked without controls.
+- Keep OpenCode `question` tool calls in **Conversation** like Claude Code
+  questions, with options and the recorded answer, and show a call with no
+  questions as an explicit empty-question card.
 
 ### Fixed
 
+- Show the whole OpenCode question in its answer card instead of only the last
+  wrapped line.
 - Accept an answer to a second approval dialog shown while the agent stays
   blocked, and to a dialog shown again after **Cancel** or **Back**, instead of
   reporting that a different response was already submitted.
