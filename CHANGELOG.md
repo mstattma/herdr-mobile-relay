@@ -5,6 +5,11 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- Find conversation history for non-default OpenCode install channels by
+  reading their per-channel databases as well as the default database.
+
 ## [0.24.0] - 2026-11-02
 
 ### Added
