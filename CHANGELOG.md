@@ -40,6 +40,9 @@ project follows [Semantic Versioning](https://semver.org/).
   input, avoiding browser scroll jumps while typing.
 - Load Terminal and session details on demand to keep the initial download
   within its existing size budget; validate nested shared chunk references.
+- Serve reachable static dependencies of lazy web chunks through the relay,
+  not only direct dynamic imports of the main script. This fixes failed
+  Conversation/Terminal loading when they share a separate module.
 - Find conversation history for non-default OpenCode install channels by
   reading their per-channel databases as well as the default database.
 - Show the whole OpenCode question in its answer card instead of only the last

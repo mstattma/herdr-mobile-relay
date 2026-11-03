@@ -18,7 +18,7 @@ import (
 	relayrelease "github.com/0cv/herdr-mobile-relay/internal/release"
 )
 
-var lazyAssetReferencePattern = regexp.MustCompile("import\\(\\s*[`\\\"']\\./([A-Za-z0-9_.-]+-[0-9]+\\.js)[`\\\"']\\s*\\)")
+var lazyAssetReferencePattern = regexp.MustCompile("(?:\\bimport\\s*\\(\\s*|\\b(?:from|import)\\s*)[`\\\"']\\./([A-Za-z0-9_.-]+-[0-9]+\\.js)[`\\\"']")
 
 var allowedAssets = map[string]bool{
 	"index.html":            true,
@@ -191,31 +191,39 @@ func (h *Handler) immutableAsset(asset string) bool {
 
 // Lazy chunks are not entry assets, so they are not repeated in the small
 // release descriptor file map. Only chunks referenced by the verified
-// application module, with the exact release asset version, are executable.
+// application module's import graph, with the exact release asset version,
+// are executable. Shared dependencies may be static imports of a lazy chunk.
 func (h *Handler) isVersionedLazyAsset(asset string) bool {
 	return h.descriptorLoaded && h.lazyAssets[asset]
 }
 
 func (h *Handler) loadLazyAssets(scriptPath string) {
-	source, err := fs.ReadFile(h.files, scriptPath)
-	if err != nil {
-		return
-	}
-	for _, match := range lazyAssetReferencePattern.FindAllSubmatch(source, -1) {
-		if len(match) != 2 {
+	pending := []string{scriptPath}
+	for len(pending) > 0 {
+		importer := pending[len(pending)-1]
+		pending = pending[:len(pending)-1]
+		source, err := fs.ReadFile(h.files, importer)
+		if err != nil {
 			continue
 		}
-		name := string(match[1])
-		stem := strings.TrimSuffix(name, ".js")
-		dash := strings.LastIndexByte(stem, '-')
-		if dash <= 0 || dash == len(stem)-1 {
-			continue
+		for _, match := range lazyAssetReferencePattern.FindAllSubmatch(source, -1) {
+			name := string(match[1])
+			asset := "assets/" + name
+			if asset == scriptPath || h.lazyAssets[asset] {
+				continue
+			}
+			stem := strings.TrimSuffix(name, ".js")
+			dash := strings.LastIndexByte(stem, '-')
+			if dash <= 0 || dash == len(stem)-1 {
+				continue
+			}
+			version, err := strconv.Atoi(stem[dash+1:])
+			if err != nil || version != h.bundleAssets {
+				continue
+			}
+			h.lazyAssets[asset] = true
+			pending = append(pending, asset)
 		}
-		version, err := strconv.Atoi(stem[dash+1:])
-		if err != nil || version != h.bundleAssets {
-			continue
-		}
-		h.lazyAssets["assets/"+name] = true
 	}
 }
 
