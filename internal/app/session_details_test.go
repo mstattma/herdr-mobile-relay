@@ -2,15 +2,18 @@ package app
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/0cv/herdr-mobile-relay/internal/agentroots"
 	"github.com/0cv/herdr-mobile-relay/internal/conversation"
 	"github.com/0cv/herdr-mobile-relay/internal/coordinator"
 	"github.com/0cv/herdr-mobile-relay/internal/herdr"
@@ -176,5 +179,58 @@ func TestSessionDetailsBeforeNativeSessionExists(t *testing.T) {
 	}
 	if !result.OK || json.Unmarshal(encoded, &details) != nil || details.SessionID != "" || details.Reason == "invalid_session" || details.TodosAvailable || details.Subscriptions == nil || !details.Subscriptions.Available || len(details.Subscriptions.Rows) != 1 || details.Subscriptions.Rows[0].Current {
 		t.Fatalf("sessionless details = %+v, data %s", result, encoded)
+	}
+}
+
+func TestSessionDetailsWithoutSubscriptionRouter(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv(agentroots.OpenCodeListEnv, root)
+	db, err := sql.Open("sqlite", filepath.Join(root, "opencode.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	// Only standard OpenCode session/todo fields are needed, not extension tables.
+	_, err = db.Exec(`CREATE TABLE session(id TEXT PRIMARY KEY,title TEXT,directory TEXT);
+CREATE TABLE message(id TEXT); CREATE TABLE part(id TEXT);
+CREATE TABLE todo(session_id TEXT,position INTEGER,content TEXT,status TEXT,priority TEXT);
+INSERT INTO session VALUES('ses_detail','Stock session','/work/stock');
+INSERT INTO todo VALUES('ses_detail',0,'Review changes','pending','high');`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, mode := range []string{"unconfigured", "missing-exporter", "failure"} {
+		t.Run(mode, func(t *testing.T) {
+			switch mode {
+			case "unconfigured":
+				t.Setenv("HERDR_SESSION_DETAILS_COMMAND", "")
+			case "missing-exporter":
+				argv, _ := json.Marshal([]string{filepath.Join(t.TempDir(), "not-installed")})
+				t.Setenv("HERDR_SESSION_DETAILS_COMMAND", string(argv))
+			default:
+				configureDetailsProvider(t, mode)
+			}
+			state := coordinator.NewState(slog.New(slog.NewTextHandler(io.Discard, nil)))
+			state.CommitInventory([]*coordinator.AgentState{{PaneID: "pane-1", TerminalID: "terminal-1", SessionID: "ses_detail", Agent: "opencode"}}, state.RevisionCounter())
+			agent, _ := state.Agent("pane-1")
+			server := &Server{state: state, conversationM: conversation.NewReader(t.TempDir())}
+			request := protocol.Inbound{Type: "get_session_details", PaneID: "pane-1", Target: &protocol.TargetRef{ServerSessionID: "primary", PaneID: "pane-1", TerminalID: "terminal-1", Generation: agent.Generation, AgentSessionID: "ses_detail"}}
+			result := server.getSessionDetails(context.Background(), request)
+			encoded, _ := json.Marshal(result.Data)
+			var details struct {
+				conversation.SessionDetails
+				Subscriptions *sessionSubscriptions `json:"subscriptions"`
+			}
+			if !result.OK || json.Unmarshal(encoded, &details) != nil || details.SessionID != "ses_detail" || details.Title != "Stock session" || details.CWD != "/work/stock" || !details.TodosAvailable || len(details.Todos) != 1 || details.Todos[0].Content != "Review changes" {
+				t.Fatalf("optional integration broke core details: %+v, data %s", result, encoded)
+			}
+			if mode == "unconfigured" {
+				if details.Subscriptions != nil || details.Reason != "" {
+					t.Fatalf("unconfigured integration must be omitted: %s", encoded)
+				}
+			} else if details.Subscriptions == nil || details.Subscriptions.Available || details.Reason != "subscriptions_failed" || strings.Contains(string(encoded), "SECRET_SENTINEL") {
+				t.Fatalf("provider failure must remain isolated and sanitized: %s", encoded)
+			}
+		})
 	}
 }
