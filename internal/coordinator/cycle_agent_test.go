@@ -34,6 +34,8 @@ func TestCycleAgentFreshPromptAndExactTarget(t *testing.T) {
 			message := map[string]any{"type": "cycle_agent", "protocol": protocol.Version, "pane_id": "pane-1", "request_id": "cycle-1", "target": protocol.TargetRef{ServerSessionID: "primary", PaneID: "pane-1", TerminalID: "terminal-1", Generation: agent.Generation, AgentSessionID: "ses_cycle"}}
 			content := composer
 			switch scenario {
+			case "working":
+				content = strings.Replace(content, "/work/example  12.0K", "\u25a0\u25a0\u2b1d\u2b1d  esc interrupt   12.0K", 1)
 			case "home":
 				content = strings.Replace(content, "\n  \u2503\n  \u2503\n  \u2503\n", "\n  \u2503\n  \u2503  Ask anything\u2026 \"Fix broken tests\"\n  \u2503\n", 1)
 				content = strings.Replace(content, "/work/example  12.0K (4%)", "tab agents", 1)
@@ -77,7 +79,7 @@ func TestCycleAgentFreshPromptAndExactTarget(t *testing.T) {
 			dispatcher := NewDispatcher(client, state, nil, testLogger())
 			defer dispatcher.Close(context.Background())
 			result := dispatcher.HandleCycleAgent(ctx, message, func() {})
-			if scenario == "normal" || scenario == "home" {
+			if scenario == "normal" || scenario == "home" || scenario == "working" {
 				if !result.OK || result.Phase != "sent" || result.Action != "cycle_agent" {
 					t.Fatalf("cycle = %+v", result)
 				}

@@ -3,7 +3,7 @@ import { stripAnsi } from './terminal';
 const BORDER = /^ *\u2579\u2580{16,}/u;
 const MODEL = /^[A-Za-z][A-Za-z0-9 _-]{0,79} \u00b7 \S[^\r\n]*$/u;
 const PLACEHOLDER = /^Ask anything(?:\.{3}|\u2026) "[^"\r\n]+"$/u;
-const HINT = /^(?:(?:ctrl\+[a-z] variants|[/~][^\r\n]*|[A-Za-z]:[\\/][^\r\n]*)\s{2,})?(?:tab agents|[0-9][0-9.,]*[kKmMbBtT]?(?: \([0-9]+%\))?(?: \u00b7 \$[0-9.,]+)?)\s+ctrl\+p commands$/u;
+const HINT = /^(?:(?:ctrl\+[a-z] variants|\S+\s+esc (?:again to )?interrupt|[/~][^\r\n]*|[A-Za-z]:[\\/][^\r\n]*)\s{2,})?(?:tab agents|[0-9][0-9.,]*[kKmMbBtT]?(?: \([0-9]+%\))?(?: \u00b7 \$[0-9.,]+)?)\s+ctrl\+p commands$/u;
 const HOME_FOOTER = /^(?:(?:[/~]|[A-Za-z]:[\\/])[^\r\n]*\s{2,})?(?:\u2299 \d+ MCP \/status\s{2,})?\d+\.\d+\.\d+(?:[-+][A-Za-z0-9._-]+)?$/u;
 const MODAL = /\S[^\r\n]*[ \t]{2,}esc(?:\/enter)?(?:[ \t]{2,}|[ \t]*$)/iu;
 const DIALOG_CONTROLS = /(?:\benter (?:confirm|submit|toggle)\b[^\r\n]*\besc (?:cancel|dismiss)\b|\u21c6 select[^\r\n]*\benter confirm\b)/iu;

@@ -19,7 +19,9 @@ func CycleAgentEligible(agent *AgentState) bool {
 	if agent.AttentionKind != "" && agent.AttentionKind != question.AttentionChat {
 		return false
 	}
-	return agent.Status == "idle" || agent.Status == "done" || agent.Status == "blocked" && agent.AttentionKind == question.AttentionChat
+	// Native agent.cycle changes the next submission's selection, not the
+	// in-flight request. Working is safe when the normal prompt is revalidated.
+	return agent.Status == "idle" || agent.Status == "done" || agent.Status == "working" || agent.Status == "blocked" && agent.AttentionKind == question.AttentionChat
 }
 
 func (d *Dispatcher) HandleCycleAgent(ctx context.Context, message map[string]any, admitted func()) *CommandResult {

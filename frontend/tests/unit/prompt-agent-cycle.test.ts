@@ -44,6 +44,19 @@ afterEach(() => {
 });
 
 describe('OpenCode agent cycling', () => {
+  it('allows changing the next agent selection while the current request is working', async () => {
+    const working = { ...agent, status: 'working', agent_session_id: 'ses_working_fixture' };
+    vi.spyOn(relayStore, 'sendToAgent').mockResolvedValue(completed);
+    const view = render(PromptComposer, { agent: working });
+    await view.rerender({ frame: { ...freshFrame(working), content: nativePrompt.replace('/work/example  12.0K', '\u25a0\u25a0\u2b1d\u2b1d  esc interrupt   12.0K') } });
+    await fireEvent.input(screen.getByLabelText('Prompt'), { target: { value: 'next prompt draft' } });
+    const button = screen.getByRole('button', { name: 'Switch agent' });
+    expect(button).toBeEnabled();
+    await fireEvent.click(button);
+    expect(relayStore.sendToAgent).toHaveBeenCalledExactlyOnceWith(working, { type: 'cycle_agent' });
+    expect(screen.getByLabelText('Prompt')).toHaveValue('next prompt draft');
+  });
+
   it('sends one guarded cycle command, not the draft, and reports Tab rather than a selected mode', async () => {
     let finish!: (result: CommandResult) => void;
     vi.mocked(relayStore.sendToAgent).mockImplementation(() => new Promise((resolve) => { finish = resolve; }));

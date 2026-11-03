@@ -9,7 +9,7 @@ var (
 	openCodeCycleBorder      = regexp.MustCompile(`^ *\x{2579}\x{2580}{16,}`)
 	openCodeCycleModel       = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9 _-]{0,79} \x{00b7} \S[^\r\n]*$`)
 	openCodeCyclePlaceholder = regexp.MustCompile(`^Ask anything(?:\.{3}|\x{2026}) "[^"\r\n]+"$`)
-	openCodeCycleHint        = regexp.MustCompile(`^(?:(?:ctrl\+[a-z] variants|[/~][^\r\n]*|[A-Za-z]:[\\/][^\r\n]*)\s{2,})?(?:tab agents|[0-9][0-9.,]*[kKmMbBtT]?(?: \([0-9]+%\))?(?: \x{00b7} \$[0-9.,]+)?)\s+ctrl\+p commands$`)
+	openCodeCycleHint        = regexp.MustCompile(`^(?:(?:ctrl\+[a-z] variants|\S+\s+esc (?:again to )?interrupt|[/~][^\r\n]*|[A-Za-z]:[\\/][^\r\n]*)\s{2,})?(?:tab agents|[0-9][0-9.,]*[kKmMbBtT]?(?: \([0-9]+%\))?(?: \x{00b7} \$[0-9.,]+)?)\s+ctrl\+p commands$`)
 	openCodeCycleHomeFooter  = regexp.MustCompile(`^(?:(?:[/~]|[A-Za-z]:[\\/])[^\r\n]*\s{2,})?(?:\x{2299} \d+ MCP /status\s{2,})?\d+\.\d+\.\d+(?:[-+][A-Za-z0-9._-]+)?$`)
 	// Native modal headers place an isolated esc at the right of their title.
 	// Permission/question panels have paired action hints, not just these words

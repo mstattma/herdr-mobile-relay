@@ -24,6 +24,7 @@ const sidebar = prompt('', footer, true);
 describe('OpenCode empty native composer recognition', () => {
   it.each([
     ['session without placeholder or tab hint', session],
+    ['working footer', prompt('', '[busy] esc interrupt  12.0K (4%)  ctrl+p commands')],
     ['session with sidebar', sidebar],
     ['session with ANSI colors', '\x1b[38;2;224;108;117m\x1b[48;2;30;30;30m' + sidebar.replaceAll('\n', '\x1b[0m\n\x1b[38;2;224;108;117m') + '\x1b[0m'],
     ['session with CRLF', session.replaceAll('\n', '\r\n')],
@@ -55,7 +56,6 @@ describe('OpenCode empty native composer recognition', () => {
     ['unknown overlay', session + '\nUnknown popup'],
     ['missing command hint', prompt('', '/work/example  12.0K (4%)')],
     ['unknown footer', prompt('', 'Unknown control  12.0K (4%)  ctrl+p commands')],
-    ['working footer', prompt('', '[busy] esc interrupt  12.0K (4%)  ctrl+p commands')],
     ['shell mode', session.replace('Plan \u00b7 Example Model ExampleProvider \u00b7 high', 'Shell')],
     ['missing input row', session.replace('\n  \u2503  \n', '\n')],
     ['missing top separator', session.replace('\n\n  \u2503', '\n  \u2503')],

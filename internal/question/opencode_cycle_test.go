@@ -71,7 +71,7 @@ func TestOpenCodeCyclePrompt(t *testing.T) {
 		{"unknown overlay", session + "\nUnknown popup", false},
 		{"no command hint", openCodeCycleFixture("", "/work/example  12.0K (4%)", false), false},
 		{"unknown footer content", openCodeCycleFixture("", "Unknown control  12.0K (4%)  ctrl+p commands", false), false},
-		{"working footer", openCodeCycleFixture("", "[busy] esc interrupt  12.0K (4%)  ctrl+p commands", false), false},
+		{"working footer", openCodeCycleFixture("", "[busy] esc interrupt  12.0K (4%)  ctrl+p commands", false), true},
 		{"shell mode", strings.Replace(session, "Plan \u00b7 Example Model ExampleProvider \u00b7 high", "Shell", 1), false},
 		{"missing input row", strings.Replace(session, "\n  \u2503  \n", "\n", 1), false},
 		{"missing top separator", strings.Replace(session, "\n\n  \u2503", "\n  \u2503", 1), false},

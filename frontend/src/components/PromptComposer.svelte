@@ -47,7 +47,7 @@
     && secretState.ready && frame?.noEcho === false && !frame.resizeSettling && frame !== cycledFrame
     && Boolean(frame.target && targetRefMatchesAgent(frame.target, agent))
     && openCodeCyclePrompt(frame.content) && !promptDispatchRestriction(agent)
-    && (agent.status === 'idle' || agent.status === 'done' || agent.status === 'blocked' && agent.attention_kind === 'chat')
+    && (agent.status === 'idle' || agent.status === 'done' || agent.status === 'working' || agent.status === 'blocked' && agent.attention_kind === 'chat')
     && !agent.interaction && !agent.question_layout && !agent.options?.length
     && !['approval', 'question', 'unknown'].includes(agent.attention_kind || '');
   }

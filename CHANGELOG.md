@@ -31,6 +31,9 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Allow OpenCode agent switching while working at a normal empty composer,
+  including its spinner/interrupt footer. This selects the next request's
+  agent without interrupting the current request; dialog guards remain active.
 - Preserve OpenCode's physical terminal rows as one horizontally scrollable
   grid instead of mixing conversation and sidebar columns. Read the current
   visible screen rather than accumulated repaint frames. OpenCode no longer
