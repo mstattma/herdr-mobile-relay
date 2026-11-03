@@ -31,6 +31,8 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Give Session details a visible button background and border rather than
+  styling it like a plain heading; keep the branch warning underneath.
 - Keep the conversation-branch warning below Session details and wrap toolbar
   controls on narrow displays instead of squeezing the search input.
 - Allow OpenCode agent switching while working at a normal empty composer,

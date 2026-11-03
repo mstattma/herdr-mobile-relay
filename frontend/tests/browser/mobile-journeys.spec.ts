@@ -4558,6 +4558,8 @@ test('conversation toolbar stacks provenance below details and keeps search usab
   await page.getByRole('button', { name: 'Open Toolbar fixture on Fedora' }).click();
   const toolbar = page.locator('.conversation-toolbar');
   const details = toolbar.getByRole('button', { name: 'Session details', exact: true });
+  await expect(details).toHaveClass(/button-secondary/);
+  await expect(details).toHaveAttribute('aria-haspopup', 'dialog');
   const warning = toolbar.locator('.conversation-branch-trust');
   const search = toolbar.getByRole('searchbox', { name: 'Search loaded conversation' });
   await expect(warning).toBeVisible();

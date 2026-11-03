@@ -727,7 +727,7 @@
   <header class="conversation-toolbar">
     <div class="conversation-context">
       <h2 id="conversation-title" class="sr-only">Conversation</h2>
-      {#if ondetails}<Button variant="ghost" size="sm" onclick={ondetails}>Session details</Button>{/if}
+      {#if ondetails}<Button variant="secondary" size="sm" aria-haspopup="dialog" onclick={ondetails}>Session details</Button>{/if}
       {#if branchUnverified}<small class="hint conversation-branch-trust">Branch unverified<span class="sr-only">: saved history may not reflect the current branch.</span></small>{/if}
     </div>
     <div class="conversation-toolbar-actions">
