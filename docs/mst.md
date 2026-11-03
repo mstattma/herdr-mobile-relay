@@ -1,6 +1,6 @@
 # Fork Builds
 
-`mst` is based on upstream **v0.24.0**. Our release is **0.24.0+mst.3**.
+`mst` is based on upstream **v0.24.0**. Our release is **0.24.0+mst.4**.
 Build metadata does not affect version ordering, so the Settings page still
 announces newer upstream releases. Installing one replaces our patches;
 there are no automatic installs. Builds are local for now, not GitHub releases.
@@ -34,7 +34,7 @@ bun install --frozen-lockfile --cwd frontend
 make frontend-check
 bun frontend/scripts/release.mjs
 HERDR_RELEASE_TARGETS=linux/amd64 \
-  sh scripts/package-release.sh 0.24.0+mst.3 "$(git rev-parse HEAD)" dist/release
+  sh scripts/package-release.sh 0.24.0+mst.4 "$(git rev-parse HEAD)" dist/release
 ```
 
 `HERDR_RELEASE_TARGETS` can select a host target for a local build; omit it to
@@ -83,4 +83,6 @@ fields. Output is bounded and unknown fields are discarded by the relay.
 
 The OpenCode Switch agent action uses the default Tab binding at a fresh, empty
 native prompt. It cycles primary agents; it does not claim to select a named
-mode and does not support custom bindings or operation inside dialogs.
+mode and does not support custom bindings or operation inside dialogs. It also
+works while a request is running: OpenCode changes the selection for the next
+submission without interrupting the already-running request.

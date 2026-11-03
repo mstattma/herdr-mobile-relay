@@ -1,23 +1,23 @@
 {
   "schema": 1,
   "version": "0.24.0",
-  "assets": 485003,
-  "build": "3f81dfa095ffd23d3c2b8cdcf2c63a9d4ea4a7dbb9c739886a9b4d420e4fb4c6",
-  "entry": "/builds/0.24.0-485003-3f81dfa095ffd23d/index.html",
+  "assets": 485004,
+  "build": "d53d5cfccc85d02ef10e07a0bd89a303ea0ca2a4cc906dae0b74be18935d68e2",
+  "entry": "/builds/0.24.0-485004-d53d5cfccc85d02e/index.html",
   "files": {
     "entry": {
-      "path": "builds/0.24.0-485003-3f81dfa095ffd23d/index.html",
-      "sha256": "64f167f1e28626c06dce13fa5cc4fcf7d3b88099d2e0bd97ec27f6a45c19f661",
-      "integrity": "sha256-ZPFn8eKGJsBtzhP6XMT899O4gJnS4L2X7Cf2pFwZ9mE=",
-      "brotli_sha256": "1d21e5bea45eedbcfcc76e78e5ae064f2b2f6a730bfc3b370418d7c44fe282b9",
-      "brotli_integrity": "sha256-HSHlvqRe7bz8x2545a4GTysvanML/Ds3BBjXxE/igrk="
+      "path": "builds/0.24.0-485004-d53d5cfccc85d02e/index.html",
+      "sha256": "4d1d02495f8ed5acf897604e89fc02bcbe14ccca43aff73feebfc7c4dd6681fc",
+      "integrity": "sha256-TR0CSV+O1az4l2BOifwCvL4UzMpDr/c/7r/HxN1mgfw=",
+      "brotli_sha256": "b012013350e8b0b1960d57d4604e0a7e8d826cb1dc3110ac5672d010be6bab71",
+      "brotli_integrity": "sha256-sBIBM1DosLGWDVfUYE4Kfo2CbLHcMRCsVnLQEL5rq3E="
     },
     "javascript": {
-      "path": "assets/app-c2473637963e6ef8f14cdfdf09e14f669f1b7ae7ff6c892e7f8e3efbca5052ab.js",
-      "sha256": "c2473637963e6ef8f14cdfdf09e14f669f1b7ae7ff6c892e7f8e3efbca5052ab",
-      "integrity": "sha256-wkc2N5Y+bvjxTN/fCeFPZp8beuf/bIkuf44++8pQUqs=",
-      "brotli_sha256": "8c0e5680a5afaad53b308f776f1337622ed380de48b76b24146bafe06b11d4aa",
-      "brotli_integrity": "sha256-jA5WgKWvqtU7MI93bxM3Yi7TgN5It2skFGuv4GsR1Ko="
+      "path": "assets/app-33badc3e3dfeaf725296e212779bcc2992769bbd23fe2a74bfc4639dcda7a7ee.js",
+      "sha256": "33badc3e3dfeaf725296e212779bcc2992769bbd23fe2a74bfc4639dcda7a7ee",
+      "integrity": "sha256-M7rcPj3+r3JSluISd5vMKZJ2m70j/ip0v8Rjnc2np+4=",
+      "brotli_sha256": "7d9decf4cc97e9eb0d87005145cf7d0b2313cc3a0f3d5e7623bb173ae0199b89",
+      "brotli_integrity": "sha256-fZ3s9MyX6esNhwBRRc99CyMTzDoPPV52I7sXOuAZm4k="
     },
     "stylesheet": {
       "path": "assets/app-83564eabc3ac0db0ece6b5d9940eb854c2db33a8fa0c500f3c43af9278f66ca0.css",
