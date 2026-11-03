@@ -31,6 +31,8 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Align Session details with the top of the Conversation/Full history toggle,
+  including when Search wraps beneath the toggle.
 - Give Session details a visible button background and border rather than
   styling it like a plain heading; keep the branch warning underneath.
 - Keep the conversation-branch warning below Session details and wrap toolbar

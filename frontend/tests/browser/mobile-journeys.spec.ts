@@ -4568,9 +4568,10 @@ test('conversation toolbar stacks provenance below details and keeps search usab
     for (const width of [320, 412, 1100]) {
       await page.setViewportSize({ width, height: 850 });
       await expect.poll(async () => {
-        const [button, provenance, input] = await Promise.all([details.boundingBox(), warning.boundingBox(), search.boundingBox()]);
-        return Boolean(button && provenance && input
+        const [button, provenance, input, mode, actions] = await Promise.all([details.boundingBox(), warning.boundingBox(), search.boundingBox(), toolbar.locator('.conversation-mode').boundingBox(), toolbar.locator('.conversation-toolbar-actions').boundingBox()]);
+        return Boolean(button && provenance && input && mode && actions
           && provenance.y >= button.y + button.height - 1
+          && (actions.x < button.x + button.width || Math.abs(mode.y - button.y) < 1)
           && input.width >= 96 && input.x >= 0 && input.x + input.width <= width + 1);
       }).toBe(true);
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
