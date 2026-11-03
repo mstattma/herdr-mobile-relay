@@ -31,6 +31,8 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Keep the conversation-branch warning below Session details and wrap toolbar
+  controls on narrow displays instead of squeezing the search input.
 - Allow OpenCode agent switching while working at a normal empty composer,
   including its spinner/interrupt footer. This selects the next request's
   agent without interrupting the current request; dialog guards remain active.

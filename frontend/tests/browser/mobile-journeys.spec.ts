@@ -4537,6 +4537,50 @@ test('default agent view: stored Terminal wins across reload', async ({ page }) 
   expect((await commands(page)).slice(before.length).some(command => command.type === 'get_conversation_history')).toBe(false);
 });
 
+test('conversation toolbar stacks provenance below details and keeps search usable', async ({ page }, testInfo) => {
+  await boot(page, [fedora]);
+  await expect.poll(() => socketCount(page)).toBe(1);
+  await handshake(page, 0, { capabilities: ['conversation_history'] });
+  await setConversationFixture(page, {
+    entries: [
+      { id: 'toolbar-user', timestamp: '', role: 'user', text: 'Start the example' },
+      { id: 'toolbar-answer', timestamp: '', role: 'assistant', text: 'Findable response' },
+    ],
+    total: 2, capabilities: { source: 'recorded_history', active_branch: false },
+  });
+  await server(page, 0, {
+    type: 'agents', agents: [{
+      pane_id: 'w1:p1', status: 'idle', project: 'Toolbar fixture', agent: 'opencode',
+      session_name: 'Toolbar fixture', agent_session_id: 'ses_toolbar_fixture',
+      conversation_history_available: true,
+    }],
+  });
+  await page.getByRole('button', { name: 'Open Toolbar fixture on Fedora' }).click();
+  const toolbar = page.locator('.conversation-toolbar');
+  const details = toolbar.getByRole('button', { name: 'Session details', exact: true });
+  const warning = toolbar.locator('.conversation-branch-trust');
+  const search = toolbar.getByRole('searchbox', { name: 'Search loaded conversation' });
+  await expect(warning).toBeVisible();
+  for (const size of ['compact', 'regular', 'large']) {
+    await page.evaluate(value => { document.documentElement.dataset.interfaceSize = value; }, size);
+    for (const width of [320, 412, 1100]) {
+      await page.setViewportSize({ width, height: 850 });
+      await expect.poll(async () => {
+        const [button, provenance, input] = await Promise.all([details.boundingBox(), warning.boundingBox(), search.boundingBox()]);
+        return Boolean(button && provenance && input
+          && provenance.y >= button.y + button.height - 1
+          && input.width >= 96 && input.x >= 0 && input.x + input.width <= width + 1);
+      }).toBe(true);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    }
+  }
+  await page.setViewportSize({ width: 412, height: 850 });
+  await search.fill('Findable');
+  await expect(page.getByText('Findable response', { exact: true })).toBeVisible();
+  await expect(page.getByText('Start the example', { exact: true })).toHaveCount(0);
+  await page.screenshot({ path: testInfo.outputPath('conversation-toolbar.png') });
+});
+
 test('session details: shared drawer copies native ID, fits phone and desktop, restores focus and closes on lock', async ({ page }, testInfo) => {
   await page.addInitScript(() => {
     localStorage.setItem('herdr_default_agent_view', 'conversation');
