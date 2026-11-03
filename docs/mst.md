@@ -1,6 +1,6 @@
 # Fork Builds
 
-`mst` is based on upstream **v0.24.0**. Our release is **0.24.0+mst.4**.
+`mst` is based on upstream **v0.24.0**. Our release is **0.24.0+mst.5**.
 Build metadata does not affect version ordering, so the Settings page still
 announces newer upstream releases. Installing one replaces our patches;
 there are no automatic installs. Builds are local for now, not GitHub releases.
@@ -34,7 +34,7 @@ bun install --frozen-lockfile --cwd frontend
 make frontend-check
 bun frontend/scripts/release.mjs
 HERDR_RELEASE_TARGETS=linux/amd64 \
-  sh scripts/package-release.sh 0.24.0+mst.4 "$(git rev-parse HEAD)" dist/release
+  sh scripts/package-release.sh 0.24.0+mst.5 "$(git rev-parse HEAD)" dist/release
 ```
 
 `HERDR_RELEASE_TARGETS` can select a host target for a local build; omit it to
@@ -64,7 +64,36 @@ from the full fork deployment identity (`release_version`), with the exact
 source commit in `revision`. `herdr-mobile-relay version --json` reports the full
 fork version.
 
+## Foreground Startup
+
+Linking the plugin does not install an automatic relay service. To start the
+configured foreground transport in its own tab:
+
+```sh
+herdr plugin pane open --plugin herdr-mobile-relay.events \
+  --entrypoint quick-start --placement tab --focus
+```
+
+Skip the optional speech-voice download with `n` if unwanted. Keep this pane
+open; Ctrl-C stops the relay. Do not open another copy while it is running.
+For status, use `herdr plugin action invoke status --plugin herdr-mobile-relay.events`.
+Disconnecting a Herdr client does not itself stop its server or panes, but a
+host/WSL shutdown does. Background-service setup is a separate operation;
+the plugin's presence alone is not a guarantee of unattended startup.
+
 ## Optional Session Status
+
+The public relay does not require a patched OpenCode or a subscription router.
+Session titles, IDs, todos and channel databases use native OpenCode metadata;
+the ID comes from Herdr's standard agent-session identity, not a custom sidebar.
+Terminal question/permission and agent-cycle adapters remain version/layout
+specific and refuse unfamiliar screens rather than guessing key presses.
+
+Subscription observations are the only extension-specific part of this
+deployment. They are read explicitly through an optional host exporter, not
+transmitted by or scraped from the desktop sidebar. The exporter may reuse the
+sidebar's presentation logic without depending on its visibility. No private
+router implementation, store path or credentials are built into the public relay.
 
 `HERDR_SESSION_DETAILS_COMMAND` is a JSON argv array configured by the host
 administrator, not a command supplied by the phone. The relay invokes it only
@@ -80,6 +109,13 @@ when they integrate private extensions; never publish real status snapshots.
 Exporters must be read-only, must not refresh credentials or make network
 requests, and must never include tokens or raw provider errors in display
 fields. Output is bounded and unknown fields are discarded by the relay.
+
+Leave the setting unset on stock installations: no provider process is launched
+and the subscription payload is omitted. A configured exporter that is missing,
+fails, times out, or returns invalid output only makes subscriptions unavailable;
+session metadata and todos still return normally. The drawer reports that the
+optional observations are unavailable. Missing todo tables likewise make only
+todos unavailable, without preventing the session-details view from opening.
 
 The OpenCode Switch agent action uses the default Tab binding at a fresh, empty
 native prompt. It cycles primary agents; it does not claim to select a named
