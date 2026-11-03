@@ -5,7 +5,8 @@
   import { terminalInputDelivery } from '$lib/terminal-input-delivery.svelte';
   import { piPromptDelivery } from '$lib/pi-prompt.svelte';
   import { promptDispatchRestriction } from '$lib/terminal-input';
-  import { targetRefForAgent } from '$lib/resource-id';
+  import { targetRefForAgent, targetRefMatchesAgent } from '$lib/resource-id';
+  import { isSessionlessOpenCode } from '$lib/agent-view';
   import ConversationMessage from '$components/ConversationMessage.svelte';
   import OmoPlan from '$components/OmoPlan.svelte';
   import Button from '$components/ui/Button.svelte';
@@ -49,9 +50,11 @@
     frame,
     responding = new Set<string>(),
     onInitialPage,
-  }: { agent: Agent; readOnly?: boolean; frame?: TerminalFrame; responding?: Set<string>; onInitialPage?: (page: ConversationPage) => void } = $props();
+    ondetails,
+  }: { agent: Agent; readOnly?: boolean; frame?: TerminalFrame; responding?: Set<string>; onInitialPage?: (page: ConversationPage) => void; ondetails?: () => void } = $props();
 
   const connections = relayStore.connections;
+  const sessionless = $derived(isSessionlessOpenCode(agent));
   let paneVisible = $state(true);
   const draftState = terminalDraftState(() => agent, () => frame);
   const paneConnectionStatus = $derived($connections.get(agent.relay_id)?.status);
@@ -73,7 +76,7 @@
   // loading defaults without constructing another controller state object.
   let historyState = $state.raw<ConversationHistoryControllerState | null>(null);
   const entries = $derived(historyState?.entries ?? []);
-  const available = $derived(historyState?.available ?? true);
+  const available = $derived(!sessionless && (historyState?.available ?? true));
   const reason = $derived(historyState?.reason ?? '');
   const hasMore = $derived(historyState?.hasMore ?? false);
   const nextCursor = $derived(historyState?.nextCursor ?? '');
@@ -89,7 +92,7 @@
   const beginningReached = $derived(historyState?.beginningReached ?? false);
   const pausedReason = $derived(historyState?.pausedReason ?? '');
   const latestGapOutstanding = $derived(historyState?.latestGapOutstanding ?? false);
-  const requestPhase = $derived(historyState?.requestPhase ?? 'initial');
+  const requestPhase = $derived(sessionless ? 'idle' : historyState?.requestPhase ?? 'initial');
   const preparationPolls = $derived(historyState?.preparationPolls ?? 0);
   const error = $derived(historyState?.error?.message || '');
   const errorCode = $derived(historyState?.errorCode ?? '');
@@ -155,9 +158,11 @@
     piState.retain();
     return () => { state.release(); piState.release(); };
   });
-  const dispatchBlocked = $derived(promptDispatchRestriction(agent, screenPickerActive));
+  const dispatchBlocked = $derived(sessionless && (!draftState.ready || frame?.noEcho !== false
+    || !frame.target || !targetRefMatchesAgent(frame.target, agent))
+    ? 'Waiting for fresh terminal input state.' : promptDispatchRestriction(agent, screenPickerActive));
   const noEchoActive = $derived(Boolean(frame?.paneId === agent.pane_id && frame?.noEcho));
-  const inputPlaceholder = $derived(readOnly ? 'Reader access is read only' : 'Type a reply…');
+  const inputPlaceholder = $derived(readOnly ? 'Reader access is read only' : sessionless ? 'Type your first prompt…' : 'Type a reply…');
   function matchesSearch(entry: ConversationEntry, needle: string): boolean {
     return `${entry.text} ${(entry.tools || []).map(tool => `${tool.name} ${tool.input || ''} ${tool.output || ''}`).join(' ')}`.toLocaleLowerCase().includes(needle);
   }
@@ -179,7 +184,7 @@
   });
   const visibleEntries = $derived(filteredEntries.slice(renderStart, renderStart + mountedEntryLimit));
   const branchUnverified = $derived(liveCapabilities?.source === 'recorded_history' && liveCapabilities.active_branch !== true);
-  const liveStatusText = $derived(liveState === 'disconnected' ? 'Disconnected — loaded history remains readable.'
+  const liveStatusText = $derived(sessionless ? '' : liveState === 'disconnected' ? 'Disconnected — loaded history remains readable.'
     : liveState === 'paused' ? 'Updates paused.'
     : liveState === 'synchronizing' ? 'Synchronizing updates…'
     : liveState === 'incomplete' ? 'Live output is incomplete — use Terminal for current activity.'
@@ -222,17 +227,8 @@
     return '';
   });
 
-  onMount(() => {
-    mode = localStorage.getItem('herdr-conversation-view') === 'activity' ? 'activity' : 'conversation';
-    mounted = true;
-    liveReader = new ConversationLiveReader({
-      request: (target, revision, after, signal, subscription) => relayStore.getConversationUpdates(target, revision, after, signal, subscription),
-      unsubscribe: (target, subscription) => relayStore.stopConversationUpdates(target, subscription),
-      apply: (revision, incoming, sequence) => historyController?.applyLiveEntries(revision, incoming, sequence) === true,
-      reset: () => historyController?.returnToLatest(),
-      onState: (state, tail, capabilities) => { liveState = state; liveEntries = tail; liveCapabilities = capabilities; messageStates.retainLive(new Set(tail.map(entry => entry.id))); },
-    });
-    historyController = new ConversationHistoryController(agent, {
+  function startHistory(targetAgent: Agent) {
+    historyController = new ConversationHistoryController(targetAgent, {
       request: async (target, request) => {
         try {
           const page = await relayStore.getConversationHistory(target, request);
@@ -256,8 +252,21 @@
         && document.visibilityState !== 'hidden'
         && !$securityState.locked,
     });
-    controllerReady = true;
     historyController.start();
+  }
+
+  onMount(() => {
+    mode = localStorage.getItem('herdr-conversation-view') === 'activity' ? 'activity' : 'conversation';
+    mounted = true;
+    liveReader = new ConversationLiveReader({
+      request: (target, revision, after, signal, subscription) => relayStore.getConversationUpdates(target, revision, after, signal, subscription),
+      unsubscribe: (target, subscription) => relayStore.stopConversationUpdates(target, subscription),
+      apply: (revision, incoming, sequence) => historyController?.applyLiveEntries(revision, incoming, sequence) === true,
+      reset: () => historyController?.returnToLatest(),
+      onState: (state, tail, capabilities) => { liveState = state; liveEntries = tail; liveCapabilities = capabilities; messageStates.retainLive(new Set(tail.map(entry => entry.id))); },
+    });
+    if (!sessionless) startHistory(agent);
+    controllerReady = true;
     refreshTimer = setInterval(() => {
       if (!liveReader?.observing) historyController?.refresh();
     }, refreshIntervalMs);
@@ -353,7 +362,21 @@
   // churn cannot discard a response that belongs to this conversation.
   $effect(() => {
     const currentAgent = agent;
-    if (!controllerReady || !historyController) return;
+    if (!controllerReady) return;
+    if (sessionless) {
+      liveReader?.stop();
+      historyController?.cancel();
+      historyController = null;
+      historyState = null;
+      liveEntries = [];
+      liveCapabilities = undefined;
+      headPage = null;
+      return;
+    }
+    if (!historyController) {
+      untrack(() => startHistory(currentAgent));
+      return;
+    }
     if (!historyController.matchesRequestTarget(currentAgent)) {
       liveReader?.stop();
       liveEntries = [];
@@ -703,7 +726,8 @@
 <main class="conversation-page" aria-labelledby="conversation-title">
   <header class="conversation-toolbar">
     <div>
-      <h2 id="conversation-title">Conversation</h2>
+      <h2 id="conversation-title" class="sr-only">Conversation</h2>
+      {#if ondetails}<Button variant="ghost" size="sm" onclick={ondetails}>Session details</Button>{/if}
       {#if branchUnverified}<small class="hint conversation-branch-trust">Branch unverified<span class="sr-only">: saved history may not reflect the current branch.</span></small>{/if}
     </div>
     <div class="conversation-toolbar-actions">
@@ -727,7 +751,12 @@
     <p class="conversation-warning" role="status">Saved history is shown while current messages are checked.</p>
   {/if}
 
-  {#if loading && !entries.length}
+  {#if sessionless}
+    <div class="empty-state" role="status">
+      <p>No conversation started yet.</p>
+      <p>Send your first prompt below to start this OpenCode session.</p>
+    </div>
+  {:else if loading && !entries.length}
     <div class="empty-state" role="status" aria-live="polite">{historyStatusText || 'Loading conversation…'}</div>
   {:else if !available && !entries.length && authoritative}
     <div class="empty-state" role="status">{reason || 'Conversation history is unavailable.'}</div>

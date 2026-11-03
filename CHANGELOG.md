@@ -7,6 +7,16 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Session titles in agent cards and detail headers, with abbreviated directory
+  paths underneath. OpenCode titles come from its native session metadata.
+- A Session details drawer in Conversation and Terminal with a selectable,
+  copyable native session ID, full directory, OpenCode todos, and optional
+  host-exported subscription observations. Readers can inspect details too.
+- A first-prompt Conversation view for OpenCode panes with no native session
+  yet, plus a guarded Switch agent action using OpenCode's default Tab binding
+  without submitting the phone draft.
+- A device-local Maximum prompt lines preference, independent of Interface
+  Size, with internal scrolling and a keyboard-visible height limit.
 - Show OpenCode permission requests, including those raised by subagent
   sessions, as approval cards with the full request text (title, target
   session, and patterns) and Allow once, Allow always, and Reject buttons. The
@@ -21,6 +31,15 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Preserve OpenCode's physical terminal rows as one horizontally scrollable
+  grid instead of mixing conversation and sidebar columns. Read the current
+  visible screen rather than accumulated repaint frames. OpenCode no longer
+  uses TTY-only resizing, which left the application's dimensions inconsistent
+  with Herdr's parser; use Conversation for a phone-width transcript.
+- Measure growing prompt drafts without temporarily collapsing the focused
+  input, avoiding browser scroll jumps while typing.
+- Load Terminal and session details on demand to keep the initial download
+  within its existing size budget; validate nested shared chunk references.
 - Find conversation history for non-default OpenCode install channels by
   reading their per-channel databases as well as the default database.
 - Show the whole OpenCode question in its answer card instead of only the last

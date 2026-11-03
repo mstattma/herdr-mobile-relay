@@ -15,6 +15,7 @@ type CommandKind string
 const (
 	CommandPrompt       CommandKind = "prompt"
 	CommandKeys         CommandKind = "keys"
+	CommandCycleAgent   CommandKind = "cycle_agent"
 	CommandText         CommandKind = "text"
 	CommandInput        CommandKind = "send_input"
 	CommandTerminalText CommandKind = "send_terminal_text"

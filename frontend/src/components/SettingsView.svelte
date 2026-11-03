@@ -18,6 +18,7 @@
     HOME_LAYOUTS,
     HOME_LAYOUT_LABELS,
     INTERFACE_SIZES,
+    PROMPT_MAX_LINES_OPTIONS,
     TERMINAL_HISTORY_OPTIONS,
     TERMINAL_REFRESH_LABELS,
     TERMINAL_REFRESH_OPTIONS,
@@ -43,6 +44,8 @@
     defaultAgentView,
     homeLayout,
     interfaceSize,
+    promptMaxLines,
+    setPromptMaxLines,
     setDefaultAgentView,
     setHomeLayout,
     setInterfaceSize,
@@ -803,7 +806,7 @@
         >{AGENT_VIEW_LABELS[item]}</button>
       {/each}
     </fieldset>
-    <p class="hint">Saved on this device. Used when opening an agent unless that pane has its own setting. Conversation falls back to Terminal when a native transcript is unavailable.</p>
+    <p class="hint">Saved on this device. Used when opening an agent unless that pane has its own setting. New OpenCode sessions open a start view; existing sessions fall back to Terminal when a native transcript is unavailable.</p>
   </Card>
 
   <Card>
@@ -820,6 +823,23 @@
         <button class:active={$interfaceSize === item} type="button" aria-pressed={$interfaceSize === item} onclick={() => setInterfaceSize(item as InterfaceSize)}>{item.charAt(0).toUpperCase() + item.slice(1)}</button>
       {/each}
     </fieldset>
+    <fieldset class="choice-grid compact-grid">
+      <legend>Max Prompt Visible Lines</legend>
+      <label>
+        <span class="sr-only">Max prompt visible lines</span>
+        <select value={$promptMaxLines} onchange={(event) => {
+          const value = event.currentTarget.value;
+          if (setPromptMaxLines(value === 'automatic' ? value : Number(value)) === 'unavailable') {
+            event.currentTarget.value = String($promptMaxLines);
+            relayStore.showToast('Prompt line preference could not be saved.', true);
+          }
+        }}>
+          <option value="automatic">Automatic</option>
+          {#each PROMPT_MAX_LINES_OPTIONS as lines (lines)}<option value={lines}>{lines} lines</option>{/each}
+        </select>
+      </label>
+    </fieldset>
+    <p class="hint">Saved for this device and app origin. Independent of Interface Size; Automatic keeps the current size-based cap. Longer drafts scroll inside the prompt. The visible keyboard may reduce the cap further.</p>
     <fieldset class="choice-grid compact-grid">
       <legend>Home Workspaces</legend>
       {#each HOME_LAYOUTS as item (item)}

@@ -75,17 +75,26 @@ if (applicationScripts.length !== 1 || workerScripts.length !== 1 || unexpectedS
 if (versions.withdrawnScripts.includes(`assets/${applicationScripts[0]}`)) {
   throw new Error(`Release uses withdrawn application script: assets/${applicationScripts[0]}`);
 }
-const lazyReferencePattern = /import\(\s*[`'"]\.\/([A-Za-z0-9_.-]+-[0-9]+\.js)[`'"]\s*\)/g;
-const applicationSource = await readFile(join(root, 'assets', applicationScripts[0]), 'utf8');
-const referencedLazyScripts = new Set();
-for (const match of applicationSource.matchAll(lazyReferencePattern)) {
-  const name = match[1];
-  if (!name.endsWith(`-${versions.assets}.js`) || !lazyScripts.includes(name)) {
-    throw new Error(`Application references an invalid lazy chunk: ${name}`);
+const lazyReferencePattern = /(?:\bimport\s*\(\s*|\b(?:from|import)\s*)[`'"]\.\/([A-Za-z0-9_.-]+-[0-9]+\.js)[`'"]/g;
+const referencedScripts = new Set([applicationScripts[0]]);
+const pendingScripts = [applicationScripts[0]];
+// Shared dependencies and nested lazy imports need not appear in the root entry.
+// Imports back to the content-addressed entry are already checked below.
+while (pendingScripts.length) {
+  const importer = pendingScripts.pop();
+  const source = await readFile(join(root, 'assets', importer), 'utf8');
+  for (const match of source.matchAll(lazyReferencePattern)) {
+    const name = match[1];
+    if (name === applicationScripts[0]) continue;
+    if (!name.endsWith(`-${versions.assets}.js`) || !lazyScripts.includes(name)) {
+      throw new Error(`Application references an invalid lazy chunk: ${name} (from ${importer})`);
+    }
+    if (referencedScripts.has(name)) continue;
+    referencedScripts.add(name);
+    pendingScripts.push(name);
   }
-  referencedLazyScripts.add(name);
 }
-if (lazyScripts.some((name) => !referencedLazyScripts.has(name))) {
+if (lazyScripts.some((name) => !referencedScripts.has(name))) {
   throw new Error(`Lazy chunks must be referenced by the application: ${lazyScripts.join(', ')}`);
 }
 if (applicationStyles.length !== 1 || styles.length !== 1) {

@@ -16,13 +16,13 @@
     hostLabel,
     questionInteraction,
     sortedAgents,
-    tabName,
   } from '$lib/agents';
+  import { overviewPath, sessionTitle } from '$lib/session-overview';
   import { hiddenServers, homeLayout, setServerHidden } from '$lib/preferences';
   import { answerFailureToast, returnedInteraction } from '$lib/questions';
   import { relayStore, type CommandError } from '$lib/store';
   import type { Agent, QuestionInteraction, RelayConfig, RelayConnectionView, RelayWorkspace } from '$lib/types';
-  import { homeRelativePath, informativePath, workspaceGroupTrees, workspaceGroups, workspaceIdentity, workspaceProvenance, workspaceStateTone, type WorkspaceGroup, type WorkspaceGroupTree, type WorkspaceTab } from '$lib/workspaces';
+  import { informativePath, workspaceGroupTrees, workspaceGroups, workspaceIdentity, workspaceProvenance, workspaceStateTone, type WorkspaceGroup, type WorkspaceGroupTree, type WorkspaceTab } from '$lib/workspaces';
 
   let {
     agents: allAgents,
@@ -430,21 +430,15 @@
     await relayStore.respond(agent, index, total, option);
   }
 
-  function agentMeta(agent: Agent, compact: boolean): string {
-    const tab = compact ? '' : tabName(agent);
-    const labels = [
-      tab && tab !== displayName(agent) ? tab : '',
-      agent.session || '',
-    ].filter(Boolean);
-    if (agent.agent && !hasAgentLogo(agent.agent)) labels.push(agentDisplayName(agent.agent));
-    return labels.join(' · ');
+  function agentMeta(agent: Agent): string {
+    return agent.agent && !hasAgentLogo(agent.agent) ? agentDisplayName(agent.agent) : '';
   }
 
   // Home-relative where the relay reported its home directory, absolute
   // otherwise: a row says which directory the agent runs in, not just its
   // last segment.
   function relayPath(relayId: string, path: string): string {
-    return homeRelativePath(path, connections.get(relayId)?.home || '');
+    return overviewPath(path, connections.get(relayId)?.home || '');
   }
 
   function relativeTimestamp(timestamp: number): string {
@@ -493,14 +487,14 @@
       {@const tone = agentStatusTone(agent)}
       {@const blocked = group === 'blocked'}
       {@const needsInspection = group === 'attention'}
-      {@const meta = agentMeta(agent, compact)}
+      {@const meta = agentMeta(agent)}
       {@const age = relativeAge(agent)}
-      {@const agentPath = compact ? relayPath(agent.relay_id, String(agent.cwd || '')) : ''}
+      {@const agentPath = relayPath(agent.relay_id, String(agent.cwd || ''))}
       {@const inventoryReady = !connections.has(agent.relay_id) || connections.get(agent.relay_id)?.inventory.state === 'ready'}
       <article class:blocked class:compact-agent-card={compact} class:stale={!inventoryReady} class="agent-card">
         <button
           class="agent-open"
-          aria-label={`Open ${displayName(agent)} on ${hostLabel(agent)}`}
+          aria-label={`Open ${sessionTitle(agent)} on ${hostLabel(agent)}`}
           disabled={!inventoryReady}
           title={!inventoryReady
             ? 'This cached agent is unavailable until Herdr inventory recovers.'
@@ -516,17 +510,12 @@
           </span>
           <span class="agent-copy">
             <span class="agent-title-row">
-              {#if agentPath}
-                <!-- Inside a workspace card the computer is named once, on the
-                     card, so the row spends its width on the directory. -->
-                <span class="agent-path">{@render folderIcon()}<span>{agentPath}</span></span>
-              {:else}
-                <span class="agent-project">{displayName(agent)}{#if !compact} <span class="host-badge">@{hostLabel(agent)}</span>{/if}</span>
-              {/if}
+              <strong class="agent-project">{sessionTitle(agent)}{#if !compact} <span class="host-badge">@{hostLabel(agent)}</span>{/if}</strong>
               {#if compact && age}
                 <time class="agent-age" datetime={new Date(agentLastActiveAt(agent)).toISOString()} title={new Date(agentLastActiveAt(agent)).toLocaleString()}>{age}</time>
               {/if}
             </span>
+            {#if agentPath}<span class="overview-agent-path">{@render folderIcon()}<span>{agentPath}</span></span>{/if}
             {#if meta}<span class="agent-meta">{meta}</span>{/if}
             {#if blocked || needsInspection}
               <span class="prompt-preview" class:prompt-full={interaction && quickQuestion(interaction)}>{interaction?.question || approvalPromptPreview(agent)}</span>
@@ -785,3 +774,8 @@
     </section>
   {/if}
 </main>
+
+<style>
+  .overview-agent-path { align-items: center; color: var(--muted); display: flex; font-size: .75rem; font-weight: 400; gap: .3rem; min-width: 0; }
+  .overview-agent-path > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+</style>

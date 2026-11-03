@@ -161,3 +161,38 @@ func TestTextFormatDisplayReadNeverHarvestsScrollback(t *testing.T) {
 		t.Fatalf("text-format reads did not all use the visible screen: %s", invocations)
 	}
 }
+
+func TestOpenCodeDisplayReadUsesOnlyVisibleGrid(t *testing.T) {
+	dir := t.TempDir()
+	record := filepath.Join(dir, "invocations.log")
+	visible := "main      sidebar\n\n\nSynthetic footer\n"
+	bin := writeScript(t, dir, "herdr", "#!/bin/sh\n"+
+		"printf '%s\\n' \"$*\" >> \""+record+"\"\n"+
+		"case \" $* \" in\n"+
+		"  *\" --source visible \"*) printf 'main      sidebar\\n\\n\\nSynthetic footer\\n' ;;\n"+
+		"  *) printf 'historical repaint\\nSynthetic footer\\nSynthetic footer\\n' ;;\n"+
+		"esac\n")
+	state := NewState(testLogger())
+	state.CommitInventory([]*AgentState{{PaneID: "pane-opencode", Agent: "opencode", Status: "working"}}, state.RevisionCounter())
+	dispatcher := NewDispatcher(herdr.NewClient(bin, filepath.Join(dir, "missing.sock")), state, nil, testLogger())
+	for _, format := range []string{"ansi", "text"} {
+		for _, columns := range []float64{0, 59} {
+			response := dispatcher.HandleReadPane(context.Background(), map[string]any{
+				"pane_id": "pane-opencode", "lines": float64(400), "format": format,
+				"terminal_columns": columns,
+			})
+			if response["content"] != visible {
+				t.Fatalf("OpenCode %s display with columns=%v: %#v", format, columns, response)
+			}
+		}
+	}
+	invocations, err := os.ReadFile(record)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, format := range []string{"ansi", "text"} {
+		if strings.Count(string(invocations), "--source visible --format "+format) != 2 {
+			t.Fatalf("OpenCode reads did not use only the visible grid: %s", invocations)
+		}
+	}
+}

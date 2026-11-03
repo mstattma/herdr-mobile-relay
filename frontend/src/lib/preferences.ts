@@ -8,6 +8,8 @@ import {
   HOME_LAYOUTS,
   INTERFACE_SIZE_KEY,
   INTERFACE_SIZES,
+  PROMPT_MAX_LINES_KEY,
+  PROMPT_MAX_LINES_OPTIONS,
   TERMINAL_HISTORY_KEY,
   TERMINAL_HISTORY_OPTIONS,
   TERMINAL_HEIGHT_LEASE_KEY,
@@ -22,6 +24,7 @@ import {
   type AgentView,
   type HomeLayout,
   type InterfaceSize,
+  type PromptMaxLines,
   type TerminalHistoryLines,
   type TerminalRefreshInterval,
   type Theme,
@@ -51,6 +54,27 @@ export function readDefaultAgentView(storage?: Pick<Storage, 'getItem'>): AgentV
   } catch {
     return 'conversation';
   }
+}
+
+export function readPromptMaxLines(storage?: Pick<Storage, 'getItem'>): PromptMaxLines {
+  try {
+    const value = (storage || localStorage).getItem(PROMPT_MAX_LINES_KEY);
+    const lines = Number(value);
+    return value === String(lines) && PROMPT_MAX_LINES_OPTIONS.includes(lines) ? lines : 'automatic';
+  } catch {
+    return 'automatic';
+  }
+}
+
+export function setPromptMaxLines(value: PromptMaxLines): 'saved' | 'unavailable' {
+  if (value !== 'automatic' && !PROMPT_MAX_LINES_OPTIONS.includes(value)) return 'unavailable';
+  try {
+    localStorage.setItem(PROMPT_MAX_LINES_KEY, String(value));
+  } catch {
+    return 'unavailable';
+  }
+  promptMaxLines.set(value);
+  return 'saved';
 }
 
 export function readPaneAgentViewOverrides(
@@ -109,6 +133,7 @@ export const defaultAgentView = writable<AgentView>(readDefaultAgentView());
 export const paneAgentViewOverrides = writable<PaneAgentViewOverrides>(readPaneAgentViewOverrides());
 export const theme = writable<Theme>(savedTheme());
 export const interfaceSize = writable<InterfaceSize>(savedInterfaceSize());
+export const promptMaxLines = writable<PromptMaxLines>(readPromptMaxLines());
 export const terminalHistoryLines = writable<TerminalHistoryLines>(savedTerminalHistoryLines());
 export const terminalRefreshInterval = writable<TerminalRefreshInterval>(savedTerminalRefreshInterval());
 export const homeLayout = writable<HomeLayout>(savedHomeLayout());

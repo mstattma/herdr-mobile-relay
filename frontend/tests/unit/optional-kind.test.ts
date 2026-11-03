@@ -23,7 +23,7 @@ it('includes the unknown-kind row in an expanded synthetic workspace without Git
   const group = view.container.querySelector<HTMLDetailsElement>('details.workspace-card')!;
   group.open = true;
   await fireEvent(group, new Event('toggle'));
-  await fireEvent.click(screen.getByRole('button', { name: 'Open Development on Laptop' }));
+  await fireEvent.click(screen.getByRole('button', { name: 'Open Named agent on Laptop' }));
   expect(onopen).toHaveBeenCalledWith(agent);
   expect(view.container.querySelector('.agent-logo')).toBeTruthy();
 });

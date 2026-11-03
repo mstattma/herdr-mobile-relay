@@ -161,6 +161,8 @@ const HIDDEN_KEEPALIVE_MAX_MS = 60 * 60_000;
 // the wire and make the selected cadence affordable during normal output.
 const RELAYED_HISTORY_LINES = 1_000;
 const INVENTORY_REQUIRED_COMMANDS: Record<string, true> = {
+  cycle_agent: true,
+  get_session_details: true,
   answer_question: true,
   navigate_question: true,
   respond: true,

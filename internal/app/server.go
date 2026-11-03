@@ -308,7 +308,7 @@ func (s *Server) authorizeDeviceAction(client *transport.ClientConn, action prot
 }
 
 func authorizeAuthenticatedIdentity(identity transport.AuthenticatedIdentity, authenticated bool, action protocol.ActionMetadata, deviceID string) *protocol.ApiError {
-	if action.Operation == "get_pi_integration" && !authenticated {
+	if (action.Operation == "get_pi_integration" || action.Operation == "get_session_details" || action.Operation == "cycle_agent") && !authenticated {
 		apiErr := protocol.NewApiError(protocol.ErrorReaderDenied, map[string]any{"operation": action.Operation})
 		return &apiErr
 	}
@@ -748,6 +748,12 @@ func (s *Server) Run(ctx context.Context) error {
 			return nil
 		})
 		switch action {
+		case "get_session_details":
+			s.hub.Send(client, commandResultMessage(s.getSessionDetails(commandCtx, inbound)))
+		case "cycle_agent":
+			result := s.dispatcher.HandleCycleAgent(commandCtx, msg, admitted)
+			s.recordWriteAudit(client, msg, result)
+			s.hub.Send(client, commandResultMessage(result))
 		case "get_pi_integration", "set_pi_integration":
 			s.handlePiIntegration(commandCtx, client, inbound, msg)
 		case "get_pi_prompt_capability", "send_pi_prompt_unconfirmed":
@@ -1495,6 +1501,11 @@ func (s *Server) handlePaneSizeCommand(client *transport.ClientConn, inbound pro
 			return
 		}
 		s.sendCommandResult(client, inbound.RequestID, inbound.Type, true, "completed", "", inbound.PaneID, nil)
+		return
+	}
+	// An ioctl resizes the TTY, not Herdr's grid; OpenCode needs both to agree.
+	if agent, ok := s.state.Agent(inbound.PaneID); ok && strings.EqualFold(strings.TrimSpace(agent.Agent), "opencode") {
+		s.sendCommandResult(client, inbound.RequestID, inbound.Type, false, "failed", "Session resizing is unavailable for OpenCode", inbound.PaneID, nil)
 		return
 	}
 	if !inbound.OptIn || !s.paneSizeM.Available() {

@@ -875,11 +875,12 @@ export function terminalHtmlRows(
   normalizeLightPalette = false,
   preserveLineEnds = false,
   maxFixedGridColumns = 0,
+  strictGrid = false,
 ): RenderedTerminalRow[] {
   const lines = text.split('\n');
   const backgrounds = ansiLineBackgrounds(lines);
   return lines.map((line, index) => {
-    if (line === TERMINAL_SEPARATOR_TOKEN) {
+    if (!strictGrid && line === TERMINAL_SEPARATOR_TOKEN) {
       return {
         html: '<span class="term-separator" aria-hidden="true"></span>',
         text: '',
@@ -889,7 +890,7 @@ export function terminalHtmlRows(
         separator: true,
       };
     }
-    const renderedLine = preserveLineEnds
+    const renderedLine = (strictGrid || preserveLineEnds)
       ? (line.endsWith('\r') ? line.slice(0, -1) : line)
       : trimAnsiLineEnd(line);
     const sourceBackground = backgrounds[index];
@@ -899,10 +900,10 @@ export function terminalHtmlRows(
     const renderedText = stripAnsi(renderedLine);
     const columns = terminalTextColumns(renderedText);
     const boxCell = hasTerminalBoxCell(renderedLine);
-    const fixedGrid = preserveLineEnds
+    const fixedGrid = strictGrid || (preserveLineEnds
       && boxCell
-      && (maxFixedGridColumns < 1 || columns <= maxFixedGridColumns);
-    const wideGrid = preserveLineEnds
+      && (maxFixedGridColumns < 1 || columns <= maxFixedGridColumns));
+    const wideGrid = !strictGrid && preserveLineEnds
       && boxCell
       && maxFixedGridColumns >= 1
       && columns > maxFixedGridColumns;
@@ -912,7 +913,7 @@ export function terminalHtmlRows(
       fixedGrid ? 'terminal-grid-line' : '',
       wideGrid ? 'terminal-wide-grid' : '',
     ].filter(Boolean).join(' ');
-    const style = background ? ` style="${ansiLineBackgroundStyle(renderedLine, background)}"` : '';
+    const style = background ? ` style="${strictGrid ? `background-color:${background}` : ansiLineBackgroundStyle(renderedLine, background)}"` : '';
     // ansiToHtml escapes every text segment before it emits controlled span markup.
     return {
       html: `<span class="${classes}"${style}>${ansiToHtml(renderedLine, normalizeRow, normalizeDarkText, fixedGrid || wideGrid)}</span>`,
@@ -968,7 +969,14 @@ export function renderTerminalContent(
   preserveLayout = false,
   preserveLineEnds = preserveLayout,
   maxFixedGridColumns = 0,
+  strictGrid = false,
 ): RenderedTerminalContent {
+  // A full-screen TUI is a physical grid, not prose or accumulated history.
+  if (strictGrid) {
+    const display = preservedTerminalDisplayContent(content);
+    const rows = terminalHtmlRows(display, format === 'ansi', true, 0, true);
+    return { display, html: rows.map((row) => row.html).join(''), rows };
+  }
   const markedDisplay = preserveLayout
     ? preservedTerminalDisplayContent(content)
     : compactSeparatorLines(terminalDisplayContent(content));

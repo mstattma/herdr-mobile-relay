@@ -115,12 +115,14 @@ var actionCatalog = map[string]ActionMetadata{
 	"clarify_question":           mutateAction("clarify_question", true, true),
 	"clear_activities":           mutateAction("clear_activities", false, false),
 	"copy_agent_response":        mutateAction("copy_agent_response", false, false),
+	"cycle_agent":                mutateAction("cycle_agent", true, true),
 	"deploy_app_update":          mutateAction("deploy_app_update", false, false),
 	"create_device_invitation":   mutateAction("create_device_invitation", false, true),
 	"device_list":                readAction("device_list"),
 	"get_pi_integration":         readAction("get_pi_integration"),
 	"set_pi_integration":         mutateAction("set_pi_integration", false, true),
 	"get_activity":               readAction("get_activity"),
+	"get_session_details":        readAction("get_session_details"),
 	"get_conversation_history":   readAction("get_conversation_history"),
 	"get_conversation_updates":   readAction("get_conversation_updates"),
 	"unwatch_conversation":       readAction("unwatch_conversation"),
@@ -526,6 +528,8 @@ const PaneSizeOptInRowsCapability = "pane_size_opt_in_rows"
 const SpeechVoiceManagementCapability = "speech_voice_management"
 
 var Capabilities = []string{
+	"session_details",
+	"agent_cycle",
 	"pi_integration",
 	"attention_classification",
 	"clear_activities",

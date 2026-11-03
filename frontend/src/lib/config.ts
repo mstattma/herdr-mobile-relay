@@ -6,6 +6,7 @@ export const THEME_KEY = 'herdr_theme';
 // Keep the existing key so stored terminal-size preferences migrate into the
 // whole-interface size without resetting users.
 export const INTERFACE_SIZE_KEY = 'herdr_terminal_font_size';
+export const PROMPT_MAX_LINES_KEY = 'herdr_prompt_max_lines';
 export const LEGACY_FONT_KEY = 'herdr_home_font_size';
 export const TERMINAL_HISTORY_KEY = 'herdr_terminal_history_lines';
 export const TERMINAL_REFRESH_KEY = 'herdr_terminal_refresh_ms';
@@ -49,6 +50,8 @@ export const THEME_TERMINAL_SCHEMES: Record<Theme, TerminalScheme> = {
 };
 export const INTERFACE_SIZES = ['compact', 'regular', 'large'] as const;
 export type InterfaceSize = (typeof INTERFACE_SIZES)[number];
+export const PROMPT_MAX_LINES_OPTIONS = Array.from({ length: 19 }, (_, index) => index + 2);
+export type PromptMaxLines = 'automatic' | number;
 export const TERMINAL_HISTORY_OPTIONS = [100, 500, 1_000, 10_000] as const;
 export type TerminalHistoryLines = (typeof TERMINAL_HISTORY_OPTIONS)[number];
 export const TERMINAL_REFRESH_OPTIONS = [100, 250, 500, 1_000] as const;

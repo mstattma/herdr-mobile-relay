@@ -1129,12 +1129,13 @@ func isClaudeAgent(agent string) bool {
 	return strings.Contains(strings.ToLower(agent), "claude")
 }
 
-// readPaneForDisplay returns physical rows ("recent") for every ansi display read:
+// readPaneForDisplay returns physical rows ("recent") for most ansi display reads:
 // the visible screen alone loses rows that scroll past between watch polls,
 // and the Resize Session baseline must share row semantics with the resized
 // frames so the trailing desktop screen — including agent chrome — can be cut
 // by exact row count. Claude keeps logical lines ("recent-unwrapped") because
 // its alternate-screen history merge depends on them.
+// OpenCode uses only the visible grid: history can contain repeated full-screen repaints.
 func (d *Dispatcher) readPaneForDisplay(
 	ctx context.Context,
 	paneID string,
@@ -1148,6 +1149,9 @@ func (d *Dispatcher) readPaneForDisplay(
 	// viewport holds makes Herdr scroll the operator's real pane up and snap
 	// it back, once per read. Only "visible" cannot trigger the harvest.
 	if format != "ansi" {
+		return d.herdr.ReadPaneVisible(ctx, paneID, lines, format)
+	}
+	if agent, ok := d.state.Agent(paneID); ok && strings.EqualFold(strings.TrimSpace(agent.Agent), "opencode") {
 		return d.herdr.ReadPaneVisible(ctx, paneID, lines, format)
 	}
 	if !resized {

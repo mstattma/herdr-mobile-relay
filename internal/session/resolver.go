@@ -2,6 +2,7 @@ package session
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -64,6 +65,22 @@ func (r *Resolver) SessionNameWithProject(agent string, project conversation.Pro
 		return ""
 	}
 	agentLower := strings.ToLower(strings.TrimSpace(agent))
+	if agentLower == "opencode" {
+		// Polls must not open SQLite for every pane on every tick. Cache misses
+		// too; the finite TTL also picks up native title edits without history.
+		key := "opencode|" + sessionID
+		r.mu.Lock()
+		defer r.mu.Unlock()
+		if entry, ok := r.cache[key]; ok && time.Now().Before(entry.expires) {
+			return entry.name
+		}
+		metadata, _ := r.reader.OpenCodeMetadata(context.Background(), sessionID)
+		if len(r.cache) >= 2048 {
+			clear(r.cache)
+		}
+		r.cache[key] = cacheEntry{name: metadata.Title, expires: time.Now().Add(cacheTTL)}
+		return metadata.Title
+	}
 	key := sessionCacheKey(agentLower, project, sessionID)
 	location := r.reader.LocateWithProject(agent, project, sessionID)
 	if location.Path == "" {

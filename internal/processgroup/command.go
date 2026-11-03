@@ -26,12 +26,26 @@ func Run(ctx context.Context, command *exec.Cmd, options Options) ([]byte, error
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	command.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
-	command.WaitDelay = waitDelay
 	stdout := &bytes.Buffer{}
 	stderr := &bytes.Buffer{}
 	command.Stdout = stdout
 	command.Stderr = stderr
+	return run(ctx, command, options, func() []byte { return combinedCommandOutput(stdout, stderr) })
+}
+
+// RunWithWriters preserves caller-supplied bounded writers while using the
+// same process-group cancellation as Run. It never collects raw error output.
+func RunWithWriters(ctx context.Context, command *exec.Cmd, options Options) error {
+	_, err := run(ctx, command, options, func() []byte { return nil })
+	return err
+}
+
+func run(ctx context.Context, command *exec.Cmd, options Options, output func() []byte) ([]byte, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	command.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	command.WaitDelay = waitDelay
 	if err := command.Start(); err != nil {
 		return nil, err
 	}
@@ -42,12 +56,12 @@ func Run(ctx context.Context, command *exec.Cmd, options Options) ([]byte, error
 	}()
 	select {
 	case err := <-waitCh:
-		return combinedCommandOutput(stdout, stderr), err
+		return output(), err
 	case <-ctx.Done():
 		// Wait joins os/exec's stream-copy goroutines. If it has not completed,
 		// those goroutines may still write, so neither buffer may be read.
 		if terminateProcessGroup(command.Process.Pid, waitCh, options.PostKillWait) && options.ReturnOutputOnCancel {
-			return combinedCommandOutput(stdout, stderr), ctx.Err()
+			return output(), ctx.Err()
 		}
 		return nil, ctx.Err()
 	}

@@ -326,6 +326,28 @@ describe('terminal rendering', () => {
     expect(mixedBorders.html).not.toContain('<span class="terminal-cell">');
   });
 
+  it.each(['ansi', 'plain'])('preserves every physical row in an OpenCode strict grid (%s)', (format) => {
+    const lines = [
+      'Main content'.padEnd(60) + 'Sidebar   ',
+      `\u{1f680}${' '.repeat(58)}Sidebar   `,
+      '', '', ' '.repeat(70),
+      `\u250c${'\u2500'.repeat(68)}\u2510`,
+      '\u2500'.repeat(70), '\u2500'.repeat(4),
+      'Synthetic footer   ',
+    ];
+    const content = lines.join('\n');
+    const rendered = renderTerminalContent(content, format, false, false, 20, true);
+    expect(rendered.display).toBe(content);
+    expect(rendered.rows.map((row) => row.text)).toEqual(lines);
+    expect(rendered.rows.every((row) => row.fixedGrid && !row.wideGrid && !row.separator)).toBe(true);
+    expect(rendered.rows[0].columns).toBe(70);
+    expect(rendered.rows[1].columns).toBe(70);
+    expect(rendered.rows[1].html).toContain('terminal-cell-wide');
+    expect(rendered.html.match(/Synthetic footer/g)).toHaveLength(1);
+    expect(renderTerminalContent(content, format, true, false, 20, false))
+      .toEqual(renderTerminalContent(content, format, true, false, 20));
+  });
+
   it('keeps stale wider grids as cell rows in their own scroller in Resize Session', () => {
     const desktopTable = [
       `┌${'─'.repeat(80)}┐`,

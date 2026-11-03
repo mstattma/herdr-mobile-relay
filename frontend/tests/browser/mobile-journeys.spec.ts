@@ -319,6 +319,29 @@ async function boot(page: Page, relays: RelayFixture[] = [], path = '/', options
           }));
           return;
         }
+        if (message.type === 'get_session_details') {
+          const target = message.target as Record<string, unknown>;
+          queueMicrotask(() => this.server({
+            type: 'command_result', action: message.type, request_id: message.request_id,
+            ok: true, phase: 'completed',
+            data: {
+              session_id: target.agent_session_id || '',
+              title: 'Details fixture',
+              cwd: `/workspace/example/${'long-directory-'.repeat(12)}/project`,
+              todos_available: true,
+              todos: [{ content: '<em>Review fixture</em>', status: 'in_progress', priority: 'high' }],
+              subscriptions: {
+                available: true, observed_at: 1_700_000_000_000,
+                rows: [{
+                  label: '<b>Example plan</b>', provider: 'Example provider', status: 'available',
+                  detail: 'Usage < 25% & shared across sessions', weeklyReset: 'Friday',
+                  limits: 'Weekly: 75% remaining', paid: 'Paid plan', current: true,
+                }],
+              },
+            },
+          }));
+          return;
+        }
         if (message.type === 'get_conversation_updates') return;
         if (message.type === 'get_conversation_history') {
           const cursor = typeof message.cursor === 'string' ? message.cursor : '';
@@ -2957,6 +2980,87 @@ test('keeps box-drawn controller rows aligned at the desktop width', async ({ pa
     .getByRole('button', { name: /Terminal width:/ })).toHaveCount(0);
 });
 
+for (const reader of [false, true]) {
+  test(`OpenCode strict grid synthetic screenshot (reader=${reader})`, async ({ page }, testInfo) => {
+    await page.addInitScript(() => {
+      localStorage.setItem('herdr_terminal_resize_session', 'true');
+      localStorage.setItem('herdr_terminal_height_lease', 'true');
+    });
+    await boot(page, [fedora]);
+    await expect.poll(() => socketCount(page)).toBe(1);
+    await handshake(page, 0, { capabilities: optInCapabilities });
+    if (reader) {
+      await page.evaluate(() => localStorage.setItem('herdr_device_auth_v1', JSON.stringify({
+        version: 1,
+        relays: { fedora: {
+          kind: 'credential', id: 'credential-reader', version: 1, secret: 'R'.repeat(43),
+          deviceId: 'device-reader', role: 'reader', locale: 'en', issuedAt: Date.now(),
+        } },
+      })));
+      await handshake(page, 0, { capabilities: optInCapabilities });
+    }
+    await server(page, 0, {
+      type: 'agents',
+      agents: [{ pane_id: 'w1:p1', status: 'working', project: 'Synthetic grid', agent: 'opencode', agent_session_id: 'ses_grid_fixture' }],
+    });
+    await setAutoCommands(page, false);
+    await page.getByRole('button', { name: 'Open Synthetic grid on Fedora' }).click();
+    // Entirely synthetic physical rows, including a double-width emoji before the sidebar.
+    const rows = [
+      'Synthetic main'.padEnd(60) + 'Synthetic sidebar'.padEnd(30),
+      'Main content'.padEnd(60) + '\u2502 Sidebar A'.padEnd(30),
+      `\u{1f680}${' '.repeat(58)}` + '\u2502 Sidebar B'.padEnd(30),
+      '', '', '', ' '.repeat(90),
+      '\u2500'.repeat(90), '\u2500'.repeat(4),
+      'Synthetic footer once'.padEnd(90),
+    ];
+    const sendGrid = async () => server(page, 0, {
+      type: 'pane_content', pane_id: 'w1:p1', format: 'ansi', content: rows.join('\n'),
+    });
+    await sendGrid();
+    const terminal = page.getByRole('log');
+    const lines = terminal.locator('.ansi-line');
+    await expect(lines).toHaveCount(rows.length);
+    await expect(terminal).toHaveClass(/strict-grid/);
+    await expect(terminal).not.toHaveClass(/resize-(layout|pending)/);
+    expect(await lines.allTextContents()).toEqual(rows);
+    const geometry = await terminal.evaluate((element) => {
+      const physical = [...element.querySelectorAll<HTMLElement>('.ansi-line')];
+      const cellWidth = Number.parseFloat(element.style.getPropertyValue('--terminal-cell-width'));
+      return {
+        cellWidth,
+        lineHeight: Number.parseFloat(getComputedStyle(element).lineHeight),
+        heights: physical.map((row) => row.getBoundingClientRect().height),
+        sidebarColumns: physical.slice(1, 3).map((row) => (
+          row.querySelector('.terminal-cell-box')!.getBoundingClientRect().left - row.getBoundingClientRect().left
+        ) / cellWidth),
+        rowScrollers: physical.filter((row) => getComputedStyle(row).overflowX === 'auto').length,
+        scrolls: element.scrollWidth > element.clientWidth,
+      };
+    });
+    expect(geometry.cellWidth).toBeGreaterThan(0);
+    for (const height of geometry.heights) expect(Math.abs(height - geometry.lineHeight)).toBeLessThan(0.1);
+    for (const column of geometry.sidebarColumns) expect(Math.abs(column - 60)).toBeLessThan(0.1);
+    expect(geometry.rowScrollers).toBe(0);
+    expect(geometry.scrolls).toBe(true);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+    await testInfo.attach('synthetic-opencode-grid-left', { body: await terminal.screenshot(), contentType: 'image/png' });
+    await terminal.evaluate((element) => { element.scrollLeft = element.scrollWidth - element.clientWidth; });
+    const offset = await terminal.evaluate((element) => element.scrollLeft);
+    expect(offset).toBeGreaterThan(0);
+    rows[1] = rows[1].replace('Main content', 'Next content');
+    await sendGrid();
+    await expect(lines.nth(1)).toContainText('Next content');
+    expect(await lines.allTextContents()).toEqual(rows);
+    await expect(terminal.getByText('Synthetic footer once', { exact: true })).toHaveCount(1);
+    expect(await terminal.evaluate((element) => element.scrollLeft)).toBeCloseTo(offset, 0);
+    await testInfo.attach('synthetic-opencode-grid-sidebar', { body: await terminal.screenshot(), contentType: 'image/png' });
+    expect(await leaseCommands(page)).toHaveLength(0);
+    expect(await releaseCommands(page)).toHaveLength(0);
+    if (reader) await expect(page.getByRole('status').filter({ hasText: 'Reader access is read only' })).toBeVisible();
+  });
+}
+
 test('virtualizes terminal history and copies the latest response', async ({ page }) => {
   await page.addInitScript(() => {
     Object.defineProperty(navigator, 'clipboard', {
@@ -4431,6 +4535,160 @@ test('default agent view: stored Terminal wins across reload', async ({ page }) 
   await page.getByRole('button', { name: 'Open Stored terminal on Fedora' }).click();
   await expect(page.getByRole('main', { name: 'Terminal for Stored terminal' })).toBeVisible();
   expect((await commands(page)).slice(before.length).some(command => command.type === 'get_conversation_history')).toBe(false);
+});
+
+test('session details: shared drawer copies native ID, fits phone and desktop, restores focus and closes on lock', async ({ page }, testInfo) => {
+  await page.addInitScript(() => {
+    localStorage.setItem('herdr_default_agent_view', 'conversation');
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { async writeText(text: string) { Reflect.set(window, '__copiedSessionId', text); } },
+    });
+  });
+  await boot(page, [fedora]);
+  await expect.poll(() => socketCount(page)).toBe(1);
+  await handshake(page, 0, { capabilities: ['conversation_history', 'session_details'] });
+  await setConversationFixture(page, {
+    entries: [{ id: 'details-answer', timestamp: '', role: 'assistant', text: 'Synthetic details conversation' }],
+    total: 1, capabilities: { source: 'recorded_history', active_branch: false },
+  });
+  await server(page, 0, {
+    type: 'agents',
+    agents: [{
+      pane_id: 'w1:p1', status: 'working', project: 'Details workspace', agent: 'opencode',
+      session_name: 'Details fixture', agent_session_id: 'ses_details_fixture',
+      cwd: '/workspace/example/project', conversation_history_available: true,
+    }],
+  });
+  await page.getByRole('button', { name: 'Open Details fixture on Fedora' }).click();
+  await expect(page.getByText('Synthetic details conversation')).toBeVisible();
+  await expect(page.getByText('Branch unverified', { exact: false })).toBeVisible();
+
+  const initialViewport = page.viewportSize()!;
+  const drawer = page.getByRole('dialog', { name: 'Session details', exact: true });
+  for (const view of ['Conversation', 'Terminal']) {
+    if (view === 'Terminal') await page.getByRole('button', { name: 'Terminal view', exact: true }).click();
+    const accessor = page.locator(view === 'Conversation' ? '.conversation-toolbar' : '.terminal-copy')
+      .getByRole('button', { name: 'Session details', exact: true });
+    if (view === 'Terminal') await expect(page.locator('.terminal-copy').getByRole('button', { name: 'Copy', exact: true })).toBeVisible();
+    await accessor.click();
+    await expect(drawer).toHaveAttribute('id', 'session-details');
+    await expect(drawer.getByRole('button', { name: 'Close', exact: true })).toBeFocused();
+    const id = drawer.getByRole('textbox', { name: 'Native session ID', exact: true });
+    await expect(id).toHaveValue('ses_details_fixture');
+    await expect(id).toHaveAttribute('readonly', '');
+    await expect(drawer.getByText('<em>Review fixture</em>', { exact: true })).toBeVisible();
+    await expect(drawer.getByText('in progress / high', { exact: true })).toBeVisible();
+    await expect(drawer.getByText('<b>Example plan</b>', { exact: true })).toBeVisible();
+    await expect(drawer.getByText('Current', { exact: true })).toBeVisible();
+    await expect(drawer.getByText('Usage < 25% & shared across sessions', { exact: true })).toBeVisible();
+    await expect(drawer.getByText('Weekly: 75% remaining', { exact: true })).toBeVisible();
+    await expect(drawer.getByText('Weekly reset: Friday', { exact: true })).toBeVisible();
+    await expect(drawer.locator('time')).toHaveAttribute('datetime', '2023-11-14T22:13:20.000Z');
+    await expect(drawer.getByText(/Usage is account-wide, not per session/)).toBeVisible();
+    await expect(drawer.locator('em, b')).toHaveCount(0);
+    const copy = drawer.getByRole('button', { name: 'Copy session ID', exact: true });
+    await page.keyboard.press('Shift+Tab');
+    await expect(copy).toBeFocused();
+    await copy.click();
+    await expect.poll(() => page.evaluate(() => Reflect.get(window, '__copiedSessionId'))).toBe('ses_details_fixture');
+    await expect(drawer.getByRole('status').filter({ hasText: 'Session ID copied.' })).toBeVisible();
+
+    for (const viewport of [initialViewport, { width: 1100, height: initialViewport.height }]) {
+      await page.setViewportSize(viewport);
+      await expect.poll(() => drawer.locator('.dialog-content').evaluate(element => {
+        const box = element.getBoundingClientRect();
+        return box.left >= 0 && box.top >= 0 && box.right <= innerWidth + 1 && box.bottom <= innerHeight + 1
+          && element.scrollWidth <= element.clientWidth + 1
+          && document.documentElement.scrollWidth <= document.documentElement.clientWidth;
+      })).toBe(true);
+      await page.screenshot({ path: testInfo.outputPath(`details-${view}-${viewport.width}.png`) });
+      if (viewport.width === 1100) {
+        const panel = (await drawer.locator('.dialog-content').boundingBox())!;
+        expect(panel.x).toBeGreaterThan(0);
+        expect(panel.x + panel.width).toBeCloseTo(1100, 0);
+      }
+    }
+    await page.setViewportSize(initialViewport);
+    if (view === 'Conversation') await drawer.getByRole('button', { name: 'Close', exact: true }).click();
+    else await page.keyboard.press('Escape');
+    await expect(drawer).toHaveCount(0);
+    await expect(accessor).toBeFocused();
+  }
+  for (const request of (await commands(page)).filter(command => command.type === 'get_session_details')) {
+    expect(request.target).toMatchObject({
+      server_session_id: 'primary', pane_id: 'w1:p1', terminal_id: 'terminal-w1:p1',
+      generation: 1, agent_session_id: 'ses_details_fixture',
+    });
+  }
+
+  await page.locator('.terminal-copy').getByRole('button', { name: 'Session details', exact: true }).click();
+  await expect(drawer).toBeVisible();
+  await page.evaluate(() => {
+    localStorage.setItem('herdr_require_device_unlock', 'true');
+    localStorage.setItem('herdr_device_unlock_credential', 'AQ');
+    document.dispatchEvent(new Event('freeze'));
+  });
+  await expect(page.getByRole('dialog', { name: 'Unlock Herdr', exact: true })).toBeVisible();
+  await expect(drawer).toHaveCount(0);
+  await expect(page.getByRole('textbox', { name: 'Native session ID', exact: true })).toHaveCount(0);
+});
+
+test('sessionless OpenCode: start view keeps composer capped through keyboard viewport contraction without a terminal lease', async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.setItem('herdr_default_agent_view', 'conversation');
+    localStorage.setItem('herdr_prompt_max_lines', '6');
+    localStorage.setItem('herdr_terminal_resize_session', 'true');
+    localStorage.setItem('herdr_terminal_height_lease', 'true');
+  });
+  await boot(page, [fedora]);
+  await expect.poll(() => socketCount(page)).toBe(1);
+  await handshake(page, 0, { capabilities: ['conversation_history', 'session_details', 'pane_size_opt_in', 'pane_realtime_delta'] });
+  await server(page, 0, {
+    type: 'agents',
+    agents: [{
+      pane_id: 'w1:p1', status: 'working', project: 'Start workspace', agent: 'opencode',
+      agent_session_id: '', session_name: '', conversation_history_available: false,
+    }],
+  });
+  await page.getByRole('button', { name: 'Open New session on Fedora' }).click();
+  await expect(page.getByRole('heading', { name: 'New session', exact: true })).toBeVisible();
+  await expect(page.getByText('No conversation started yet.', { exact: true })).toBeVisible();
+  await expect(page.getByRole('log')).toHaveCount(0);
+  await replyToPaneRead(page, 'Ready for the first prompt', false);
+  const prompt = page.getByRole('combobox', { name: 'Prompt', exact: true });
+  await expect(prompt).toBeEnabled();
+  await prompt.fill(Array.from({ length: 30 }, (_, index) => `Synthetic line ${index}`).join('\n'));
+  await page.evaluate(() => document.fonts.ready);
+  const cap = await prompt.evaluate(element => {
+    const style = getComputedStyle(element);
+    return Math.min(6 * parseFloat(style.lineHeight) + parseFloat(style.paddingTop) + parseFloat(style.paddingBottom)
+      + parseFloat(style.borderTopWidth) + parseFloat(style.borderBottomWidth), (window.visualViewport?.height ?? innerHeight) * .4);
+  });
+  await expect.poll(async () => (await prompt.boundingBox())!.height).toBeCloseTo(cap, 0);
+  await expect.poll(() => prompt.evaluate(element => element.scrollHeight > element.clientHeight)).toBe(true);
+  await prompt.press('End');
+  await prompt.pressSequentially(' more text');
+  await expect.poll(async () => (await prompt.boundingBox())!.height).toBeCloseTo(cap, 0);
+  await expect(prompt).toBeFocused();
+
+  // Model the keyboard's visual viewport without changing the layout viewport.
+  await page.evaluate(() => {
+    Object.defineProperty(window.visualViewport!, 'height', { configurable: true, value: 240 });
+    window.visualViewport!.dispatchEvent(new Event('resize'));
+  });
+  await expect.poll(async () => (await prompt.boundingBox())!.height).toBeLessThanOrEqual(96);
+  expect((await prompt.boundingBox())!.height).toBeLessThan(cap);
+  await expect(prompt).toBeFocused();
+  await prompt.pressSequentially(' still typing');
+  await expect.poll(async () => (await prompt.boundingBox())!.height).toBeLessThanOrEqual(96);
+  await page.evaluate(() => {
+    Reflect.deleteProperty(window.visualViewport!, 'height');
+    window.visualViewport!.dispatchEvent(new Event('resize'));
+  });
+  await expect.poll(async () => (await prompt.boundingBox())!.height).toBeCloseTo(cap, 0);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+  expect((await commands(page)).filter(command => ['get_conversation_history', 'get_conversation_updates', 'watch_pane', 'lease_pane_size', 'release_pane_size'].includes(String(command.type)))).toHaveLength(0);
 });
 
 test('default agent view: Conversation opens directly and persists across reload', async ({ page }) => {

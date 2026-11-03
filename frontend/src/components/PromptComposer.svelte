@@ -3,7 +3,9 @@
   import AttachmentProgress from '$components/AttachmentProgress.svelte';
   import Button from '$components/ui/Button.svelte';
   import { clearPromptDraft, loadPromptDraft, promptComposerScope, savePromptDraft } from '$lib/prompt-drafts';
-  import { interfaceSize } from '$lib/preferences';
+  import { interfaceSize, promptMaxLines } from '$lib/preferences';
+  import { resizePromptComposer } from '$lib/composer-sizing';
+  import { openCodeCyclePrompt } from '$lib/opencode-agent-cycle';
   import { targetRefForAgent, targetRefMatchesAgent } from '$lib/resource-id';
   import { relayStore } from '$lib/store';
   import { securityState } from '$lib/security';
@@ -11,7 +13,7 @@
   import { terminalInputDelivery } from '$lib/terminal-input-delivery.svelte';
   import { piPromptDelivery, piPromptTarget, validPiPromptText, type PiPromptCapability } from '$lib/pi-prompt.svelte';
   import { promptDispatchRestriction } from '$lib/terminal-input';
-  import { inputContextIdentity } from '$lib/input-target-state';
+  import { freshAgentStatus, inputContextIdentity } from '$lib/input-target-state';
   import { guardReload, holdReloadsWhileSending } from '$lib/reload-guard';
   import { dispatchFlag, type ComposerSubmitAdapter } from '$lib/composer';
   import type { AttachmentBatchController, AttachmentBatchSnapshot, AttachmentRef } from '$lib/attachments';
@@ -33,6 +35,22 @@
   let draftRestored = false;
   let secretValue = $state('');
   const secretState = terminalDraftState(() => agent, () => frame);
+  const openCode = $derived((agent.agent || '').toLowerCase().replace(/[ _-]/gu, '') === 'opencode');
+  let cyclingAgent = $state(false);
+  let cycledFrame = $state.raw<TerminalFrame>();
+  const cycleReady = $derived(canCycleAgent());
+  function canCycleAgent() {
+    return openCode && !inputLocked && !sending && !sendingSecret && !uploadingAttachment
+    && !cyclingAgent && !submitAdapter && visible && !$securityState.locked
+    && freshAgentStatus(connection) && connection?.capabilities.includes('agent_cycle')
+    && relayStore.deviceCredential(agent.relay_id)?.role === 'controller'
+    && secretState.ready && frame?.noEcho === false && !frame.resizeSettling && frame !== cycledFrame
+    && Boolean(frame.target && targetRefMatchesAgent(frame.target, agent))
+    && openCodeCyclePrompt(frame.content) && !promptDispatchRestriction(agent)
+    && (agent.status === 'idle' || agent.status === 'done' || agent.status === 'blocked' && agent.attention_kind === 'chat')
+    && !agent.interaction && !agent.question_layout && !agent.options?.length
+    && !['approval', 'question', 'unknown'].includes(agent.attention_kind || '');
+  }
   const delivery = $derived(terminalInputDelivery(agent));
   const piDelivery = $derived(piPromptDelivery(agent));
   const deliveryBlocked = $derived(delivery.pending || delivery.uncertain || piDelivery.pending || piDelivery.uncertain);
@@ -187,10 +205,41 @@
   });
 
   $effect(() => {
-    const resizeFor = [composer, $interfaceSize];
+    const resizeFor = [composer, $interfaceSize, $promptMaxLines];
     void tick().then(() => {
-      if (resizeFor[0] === composer && resizeFor[1] === $interfaceSize) resizeComposer();
+      if (mounted && resizeFor[0] === composer && resizeFor[1] === $interfaceSize && resizeFor[2] === $promptMaxLines) resizeComposer();
     });
+  });
+
+  onMount(() => {
+    let pending = 0;
+    const resize = () => {
+      cancelAnimationFrame(pending);
+      pending = requestAnimationFrame(resizeComposer);
+    };
+    let width = -1;
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(() => {
+      const next = composerElement.getBoundingClientRect().width;
+      if (next !== width) { width = next; resize(); }
+    });
+    observer?.observe(composerElement);
+    const fonts = new MutationObserver(resize);
+    fonts.observe(document.documentElement, { attributes: true, attributeFilter: ['class', 'style', 'data-interface-size'] });
+    const viewport = window.visualViewport;
+    viewport?.addEventListener('resize', resize);
+    viewport?.addEventListener('scroll', resize);
+    window.addEventListener('resize', resize);
+    document.fonts?.addEventListener('loadingdone', resize);
+    resize();
+    return () => {
+      cancelAnimationFrame(pending);
+      observer?.disconnect();
+      fonts.disconnect();
+      viewport?.removeEventListener('resize', resize);
+      viewport?.removeEventListener('scroll', resize);
+      window.removeEventListener('resize', resize);
+      document.fonts?.removeEventListener('loadingdone', resize);
+    };
   });
 
   const slashConnectionStatus = $derived(connection?.status);
@@ -284,6 +333,31 @@
 
 
 
+  async function cycleAgent() {
+    if (!canCycleAgent()) return;
+    const target = { ...agent };
+    const state = delivery;
+    if (!state.begin()) return;
+    cyclingAgent = true;
+    cycledFrame = frame;
+    const sent = holdReloadsWhileSending();
+    let uncertain = true;
+    try {
+      const result = await relayStore.sendToAgent(target, { type: 'cycle_agent' });
+      uncertain = result.phase !== 'sent' || result.data?.sent !== true || !result.ok;
+      relayStore.showToast(uncertain ? 'Tab delivery is uncertain. Check Terminal before trying again.' : 'Tab sent to OpenCode. Check the terminal for the active agent.', uncertain);
+    } catch (error) {
+      uncertain = !dispatchFlag(error, 'not_started');
+      const message = error instanceof Error ? error.message : 'Could not send Tab to OpenCode.';
+      relayStore.showToast(uncertain ? `${message} Check Terminal before trying again.` : message, true);
+    } finally {
+      state.finish(uncertain);
+      sent();
+      cyclingAgent = false;
+      if (mounted) relayStore.readPane(target, true, 30);
+    }
+  }
+
   async function submitSecret() {
     const secret = secretValue;
     if (!secret || !secretReady || !frame || dispatchBlocked || sendingSecret || uploadingAttachment || sending) return;
@@ -332,12 +406,7 @@
 
   function resizeComposer() {
     if (!composerElement) return;
-    composerElement.style.height = 'auto';
-    const maxHeight = Number.parseFloat(getComputedStyle(composerElement).maxHeight);
-    const contentHeight = composerElement.scrollHeight;
-    const capped = Number.isFinite(maxHeight) && contentHeight > maxHeight;
-    composerElement.style.height = `${capped ? maxHeight : contentHeight}px`;
-    composerElement.style.overflowY = capped ? 'auto' : 'hidden';
+    resizePromptComposer(composerElement, $promptMaxLines, window.visualViewport?.height ?? window.innerHeight);
   }
 
   async function selectSlashCommand(command: SlashCommand) {
@@ -643,7 +712,14 @@
         ></textarea>
         {#if composer}<button type="button" class="input-clear" aria-label="Clear prompt text" onclick={clearComposer}>×</button>{/if}
       </div>
-      <Button type="submit" size="icon" disabled={!composer.replace(/[\r\n]+$/g, '') || composerLocked || promptBlocked || deliveryBlocked || noEchoActive || sending || uploadingAttachment || !targetRefForAgent(agent)} aria-label={sending ? 'Submitting input' : submitLabel} >{sending ? '…' : '➤'}</Button>
+      <div class="submit-stack">
+        {#if openCode}
+          <Button variant="secondary" size="sm" class="cycle-agent" disabled={!cycleReady} aria-label="Switch agent"
+            title="Sends the default Tab shortcut to cycle OpenCode primary agents (Build, Plan, or others). Custom keybindings are not supported; this does not select or confirm a mode."
+            onclick={cycleAgent}>Switch<br />agent</Button>
+        {/if}
+        <Button type="submit" size="icon" disabled={!composer.replace(/[\r\n]+$/g, '') || composerLocked || promptBlocked || deliveryBlocked || noEchoActive || sending || uploadingAttachment || !targetRefForAgent(agent)} aria-label={sending ? 'Submitting input' : submitLabel} >{sending ? '…' : '➤'}</Button>
+      </div>
       <input bind:this={imageInput} type="file" accept="image/*" multiple hidden onchange={(event) => { void filesSelected(event.currentTarget.files || []); event.currentTarget.value = ''; }} />
       <input bind:this={fileInput} type="file" accept="image/png,image/jpeg,image/gif,image/webp,text/plain,text/markdown,text/csv,application/json,application/pdf,.docx,.xlsx,.pptx,.odt,.ods,.odp" multiple hidden onchange={(event) => { void filesSelected(event.currentTarget.files || []); event.currentTarget.value = ''; }} />
     </form>
@@ -666,3 +742,9 @@
     <p class="upload-status error" role="status">Attachments and sending need a stable target. Wait for the agent inventory to refresh.</p>
   {/if}
 </div>
+
+<style>
+  .submit-stack { align-items: center; display: flex; flex-direction: column; gap: .3rem; }
+  .submit-stack :global(.cycle-agent) { font-size: .65rem; line-height: 1.2; padding: .3rem; }
+  .composer-field textarea { overscroll-behavior: contain; }
+</style>

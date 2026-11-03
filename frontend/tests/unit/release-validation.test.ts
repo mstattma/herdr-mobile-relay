@@ -1,6 +1,7 @@
-import { mkdtempSync, readFileSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { mkdtempSync, readFileSync, readdirSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import { brotliCompressSync } from 'node:zlib';
 import { afterEach, describe, expect, it } from 'vitest';
 import { validateReleaseFixture } from './release-validation-fixture';
@@ -24,11 +25,102 @@ function writeJson(root: string, name: string, value: unknown) {
   writeFileSync(join(root, `${name}.br`), brotliCompressSync(source));
 }
 
+function writeAsset(root: string, name: string, source: string) {
+  const compressed = brotliCompressSync(Buffer.from(source));
+  writeFileSync(join(root, name), source);
+  writeFileSync(join(root, `${name}.br`), compressed);
+  const sha256 = createHash('sha256').update(source).digest('hex');
+  const brotli_sha256 = createHash('sha256').update(compressed).digest('hex');
+  return {
+    sha256, integrity: `sha256-${Buffer.from(sha256, 'hex').toString('base64')}`,
+    brotli_sha256, brotli_integrity: `sha256-${Buffer.from(brotli_sha256, 'hex').toString('base64')}`,
+  };
+}
+
+// Keep the finalized fixture's identities valid when adding an import graph.
+function appendApplicationImports(root: string, imports: string) {
+  const descriptor = JSON.parse(readFileSync(join(root, 'release.json'), 'utf8'));
+  const previous = descriptor.files.javascript;
+  const source = `${readFileSync(join(root, previous.path), 'utf8')}\n${imports}\n`;
+  const path = `assets/app-${createHash('sha256').update(source).digest('hex')}.js`;
+  descriptor.files.javascript = { path, ...writeAsset(root, path, source) };
+  unlinkSync(join(root, previous.path));
+  unlinkSync(join(root, `${previous.path}.br`));
+  for (const name of readdirSync(join(root, 'assets'))) {
+    if (!name.endsWith('.js') || name === basename(path)) continue;
+    const chunk = readFileSync(join(root, 'assets', name), 'utf8');
+    if (chunk.includes(basename(previous.path))) {
+      writeAsset(root, `assets/${name}`, chunk.replaceAll(basename(previous.path), basename(path)));
+    }
+  }
+  const entryPath = descriptor.files.entry.path;
+  const entry = readFileSync(join(root, entryPath), 'utf8')
+    .replaceAll(previous.path, path)
+    .replaceAll(previous.integrity, descriptor.files.javascript.integrity);
+  descriptor.files.entry = { path: entryPath, ...writeAsset(root, entryPath, entry) };
+  const version = JSON.parse(readFileSync(join(root, 'version.json'), 'utf8'));
+  writeJson(root, 'version.json', { ...version, script: `/${path}`, script_sha256: descriptor.files.javascript.sha256 });
+  writeJson(root, 'release.json', descriptor);
+}
+
 describe('finalized release validation', () => {
   it('accepts the normally generated and compressed release', () => {
     const result = validate();
     expect(result.status, result.stderr).toBe(0);
     expect(result.stdout).toContain('Validated release structure');
+  });
+
+  it.each(['static', 'dynamic'])('accepts a reachable nested import graph with a %s root edge and cycles', (edge) => {
+    const result = validate((root) => {
+      const descriptor = JSON.parse(readFileSync(join(root, 'release.json'), 'utf8'));
+      const entry = `fixture.entry-${descriptor.assets}.js`;
+      const nested = `fixture_nested-${descriptor.assets}.js`;
+      const shared = `fixture-shared-${descriptor.assets}.js`;
+      const effect = `fixture-effect-${descriptor.assets}.js`;
+      writeAsset(root, `assets/${entry}`, `import {shared} from "./${shared}";export const marker=shared;export const next=()=>import('./${nested}');`);
+      writeAsset(root, `assets/${nested}`, `import './${effect}';import {marker} from './${entry}';import './${basename(descriptor.files.javascript.path)}';export default marker;`);
+      writeAsset(root, `assets/${shared}`, 'export const shared=1;');
+      writeAsset(root, `assets/${effect}`, 'export {};');
+      appendApplicationImports(root, edge === 'static' ? `import {marker} from './${entry}';` : `import('./${entry}');`);
+    });
+    expect(result.status, result.stderr).toBe(0);
+    expect(result.stdout).toContain('Validated release structure');
+  });
+
+  it.each(['static', 'dynamic'])('rejects a missing nested chunk referenced by a %s import', (edge) => {
+    let missing = '';
+    const result = validate((root) => {
+      const { assets } = JSON.parse(readFileSync(join(root, 'release.json'), 'utf8'));
+      const entry = `fixture-entry-${assets}.js`;
+      missing = `fixture-missing-${assets}.js`;
+      writeAsset(root, `assets/${entry}`, edge === 'static' ? `import {missing} from './${missing}';` : `import('./${missing}');`);
+      appendApplicationImports(root, `import('./${entry}');`);
+    });
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain(`Application references an invalid lazy chunk: ${missing}`);
+  });
+
+  it('rejects a nested import from a different asset namespace', () => {
+    let stale = '';
+    const result = validate((root) => {
+      const { assets } = JSON.parse(readFileSync(join(root, 'release.json'), 'utf8'));
+      const entry = `fixture-entry-${assets}.js`;
+      stale = `fixture-stale-${assets + 1}.js`;
+      writeAsset(root, `assets/${entry}`, `import {stale} from './${stale}';`);
+      appendApplicationImports(root, `import('./${entry}');`);
+    });
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain(`Application references an invalid lazy chunk: ${stale}`);
+  });
+
+  it('rejects a disconnected lazy cycle even though its chunks reference each other', () => {
+    const result = validate((root) => {
+      const { assets } = JSON.parse(readFileSync(join(root, 'release.json'), 'utf8'));
+      writeAsset(root, `assets/fixture-orphan-a-${assets}.js`, `import './fixture-orphan-b-${assets}.js';`);
+      writeAsset(root, `assets/fixture-orphan-b-${assets}.js`, `import('./fixture-orphan-a-${assets}.js');`);
+    });
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain('Lazy chunks must be referenced by the application');
   });
 
   it('rejects a wrong decoded digest even when its SRI is consistent', () => {

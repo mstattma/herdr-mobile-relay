@@ -71,12 +71,14 @@
     frame,
     responding,
     readOnly = false,
+    ondetails,
   }: {
     agent: Agent;
     allAgents: Agent[];
     frame?: TerminalFrame;
     responding: Set<string>;
     readOnly?: boolean;
+    ondetails?: () => void;
   } = $props();
 
   interface VirtualTerminalAnchor {
@@ -134,6 +136,7 @@
   let lastPreserveLayout = false;
   let lastPreserveLineEnds = false;
   let lastRenderColumnCap = 0;
+  let lastStrictGrid = false;
   let findOpen = $state(false);
   let findQuery = $state('');
   let activeFindIndex = $state(-1);
@@ -198,12 +201,14 @@
   const inspectionMode = $derived(agentNeedsInspection(agent));
   const interaction = $derived(questionInteraction(agent));
   const questionMode = $derived(Boolean(!readOnly && responsePending && attentionKind(agent) === 'question' && interaction));
+  // A TTY-only lease cannot resize Herdr's full-screen grid.
+  const strictGrid = $derived(agent.agent?.trim().toLowerCase() === 'opencode');
   // Resize Session needs three things: this device opted in, it controls the
   // relay, and the relay advertises the opt-in capability. The legacy
   // pane_size_lease name is ignored: a relay offering only that resizes on any
   // lease, with no opt-in check.
   const resizeSessionActive = $derived(
-    Boolean($terminalResizeSession
+    Boolean(!strictGrid && $terminalResizeSession
       && !readOnly && $connections.get(agent.relay_id)?.capabilities.includes('pane_size_opt_in')),
   );
   // The capability only says the relay can lease; it does not mean this pane
@@ -219,8 +224,8 @@
   // is showing a pane whose width is nobody's: alignment is already lost, so
   // those rows wrap at the container instead of stranding the reader on line
   // tails after every refresh. Readers use the same wrapping regime because
-  // their role can never obtain a size lease.
-  const resizeLayoutPending = $derived(readOnly || (resizeSessionActive && !resizeLayoutActive));
+  // their role can never obtain a size lease. OpenCode always keeps its grid.
+  const resizeLayoutPending = $derived(!strictGrid && (readOnly || (resizeSessionActive && !resizeLayoutActive)));
   const nextBlocked = $derived(sortedAgents(allAgents.filter((item) => agentNeedsResponse(item) && item.pane_id !== agent.pane_id))[0]);
   const terminalPlainText = $derived(
     stripAnsi(displayed)
@@ -340,8 +345,8 @@
     // can lease will repaint this pane at the phone's width, so trailing padding
     // measured at the desktop width is stale whether or not the width has landed
     // yet. A reader cannot lease at all, so its rows wrap at the phone instead
-    // of trailing off the side of a desktop-width grid.
-    const preserveLineEnds = !resizeSessionActive && !readOnly;
+    // of trailing off the side of a desktop-width grid, except in strict mode.
+    const preserveLineEnds = strictGrid || (!resizeSessionActive && !readOnly);
     // A frame read while the agent repaints at a new width is transient. Keep
     // the phone's last stable frame painted until the new stable frame lands,
     // but never past the deadline: a relay that keeps flagging frames would
@@ -622,13 +627,14 @@
   async function applyFrame(
     next: TerminalFrame,
     preserve = true,
-    preserveLineEnds = preserve && !resizeSessionActive && !readOnly,
+    preserveLineEnds = strictGrid || (preserve && !resizeSessionActive && !readOnly),
   ) {
     if (terminalLayoutSuspended) return;
     const renderColumnCap = resizeLayoutActive
       ? lastLeasedColumns
       : (resizeLayoutPending ? measuredPaneColumns() || 0 : 0);
     const layoutChanged = preserve !== lastPreserveLayout
+      || strictGrid !== lastStrictGrid
       || preserveLineEnds !== lastPreserveLineEnds
       || renderColumnCap !== lastRenderColumnCap;
     if (next.content === lastContent && next.format === lastFormat && !layoutChanged) return;
@@ -640,8 +646,9 @@
       // Cap box-drawing rows at the width in force. A fixed-grid row is a run
       // of fixed-width cells with no wrap opportunity between them, so past
       // the cap it must render as plain text that can wrap instead. Zero means
-      // "no cap", which only a relay that cannot lease is entitled to.
+      // "no cap", also used by OpenCode's strict grid.
       renderColumnCap,
+      strictGrid,
     );
     lastContent = next.content;
     if (rendered.display === displayed && rendered.html === renderedHtml
@@ -678,6 +685,7 @@
     lastPreserveLayout = preserve;
     lastPreserveLineEnds = preserveLineEnds;
     lastRenderColumnCap = renderColumnCap;
+    lastStrictGrid = strictGrid;
     const nextTop = resetVirtualRows(
       stick ? Number.POSITIVE_INFINITY : previousTop,
       previousAnchor,
@@ -781,6 +789,7 @@
     const width = terminalElement?.clientWidth
       || Math.round(window.visualViewport?.width || window.innerWidth);
     const layoutSignature = [
+      lastStrictGrid ? 'strict' : 'responsive',
       lastPreserveLayout ? 'preserve' : 'readable',
       resizeLayoutActive ? 'resize' : 'fixed',
       lastPreserveLineEnds ? 'line-ends' : 'wrapped',
@@ -803,6 +812,7 @@
       || renderedResizeColumns
       || 80;
     const sizes = renderedRows.map((row) => {
+      if (lastStrictGrid) return lineHeight;
       const measured = virtualHeightCache.get(row.html);
       if (measured) return measured;
       if (row.separator) return lineHeight * 1.2;
@@ -1556,6 +1566,9 @@
     <TerminalKeys queue={keyQueue} {agent} {readOnly} blocked={inputBlocked} bind:sending={keySending} extra={manualInputTrigger} />
   {/if}
   <div class:hidden={questionMode} class="terminal-view term">
+  {#if strictGrid}
+    <p class="upload-status">Fixed terminal layout; scroll sideways. Session resizing is unavailable for OpenCode.</p>
+  {/if}
   {#if findOpen}
     <section class="terminal-find" aria-label="Find in terminal">
       <input
@@ -1592,7 +1605,7 @@
   {/if}
   <div class="term-wrap">
   <div
-    class:resize-layout={resizeLayoutActive} class:resize-pending={resizeLayoutPending}
+    class:resize-layout={resizeLayoutActive} class:resize-pending={resizeLayoutPending} class:strict-grid={strictGrid}
     class="term-content preserve-layout"
     style={terminalContentStyle}
     bind:this={terminalElement}
@@ -1661,6 +1674,7 @@
       disabled={copyingAgentResponse || responding.has(agent.pane_id)}
       onclick={copyTerminalOutput}
     >{@render copyIcon()}</Button>
+    {#if ondetails}<Button variant="secondary" size="sm" onclick={ondetails}>Session details</Button>{/if}
     {#if $speechEnabled}
       <Button
         variant="secondary"

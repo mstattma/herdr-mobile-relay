@@ -9,13 +9,12 @@
   import LockScreen from '$components/LockScreen.svelte';
   import ManageDialog from '$components/ManageDialog.svelte';
   import SettingsView from '$components/SettingsView.svelte';
-  import TerminalView from '$components/TerminalView.svelte';
   import UpdateProgressDialog from '$components/UpdateProgressDialog.svelte';
   import WorkspaceInspector from '$components/WorkspaceInspector.svelte';
   import WorkspaceManager from '$components/WorkspaceManager.svelte';
   import Button from '$components/ui/Button.svelte';
   import Toast from '$components/ui/Toast.svelte';
-  import { agentOpeningView, hasConversationHistory } from '$lib/agent-view';
+  import { agentOpeningView, hasConversationView } from '$lib/agent-view';
   import { activityForNotification } from '$lib/activity';
   import {
     agentContextLabel,
@@ -50,6 +49,7 @@
   } from '$lib/router';
   import { initializeDeviceSecurity, securityState } from '$lib/security';
   import { relayStore } from '$lib/store';
+  import { sessionTitle } from '$lib/session-overview';
   import {
     AppReloadHeld,
     appUpdateStatus,
@@ -75,6 +75,11 @@
   const appUpdates = appUpdateStatus;
 
   let manageOpen = $state(false);
+  let detailsOpen = $state(false);
+  let detailsOpenedIdentity = $state('');
+  let sessionDetailsComponent = $state<typeof import('$components/SessionDetails.svelte')['default'] | null>(null);
+  let detailsTrigger = $state.raw<HTMLElement | null>(null);
+  let sessionDetailsLoading = false;
   // Bound so the header's Find control can open the terminal's own find bar.
   let terminalView = $state<{ openFind: () => void } | null>(null);
   let jumpOpen = $state(false);
@@ -112,7 +117,12 @@
       .map((relay) => relay.id));
   });
   const activeConnection = $derived(activeAgent ? $connections.get(activeAgent.relay_id) : null);
-  const conversationHistoryAvailable = $derived(hasConversationHistory(activeAgent, activeConnection));
+  const detailsIdentity = $derived(activeAgent ? JSON.stringify([activeAgent.pane_id, targetRefForAgent(activeAgent)]) : '');
+  // The drawer cannot guard its target until its first lazy import has finished.
+  $effect(() => {
+    if (detailsOpen && ($securityState.locked || !detailsIdentity || detailsIdentity !== detailsOpenedIdentity)) detailsOpen = false;
+  });
+  const conversationHistoryAvailable = $derived(hasConversationView(activeAgent, activeConnection));
   $effect(() => {
     if ($currentView.view !== 'history' || !activeAgent || conversationHistoryComponent
       || conversationHistoryLoading || conversationHistoryFailedRoute === $currentView) return;
@@ -175,7 +185,7 @@
     if ($currentView.view === 'launch') return 'Start Agent';
     if ($currentView.view === 'activity') return 'Activity';
     if ($currentView.view === 'activity_detail') return 'Activity';
-    if (activeAgent) return activeAgent.project || displayName(activeAgent);
+    if (activeAgent) return sessionTitle(activeAgent);
     if ($currentView.view === 'terminal') return 'Terminal';
     return '🐑 herdr';
   });
@@ -465,6 +475,27 @@
     };
   });
 
+  async function openSessionDetails(event?: MouseEvent) {
+    if (!activeAgent || $securityState.locked || detailsOpen) return;
+    detailsTrigger = event?.currentTarget instanceof HTMLElement ? event.currentTarget : null;
+    detailsOpenedIdentity = detailsIdentity;
+    detailsOpen = true;
+    if (sessionDetailsComponent || sessionDetailsLoading) return;
+    sessionDetailsLoading = true;
+    relayStore.showToast('Loading session details...');
+    const stillOpen = () => detailsOpen && !get(securityState).locked;
+    try {
+      sessionDetailsComponent = (await importOrReload(() => import('$components/SessionDetails.svelte'), stillOpen)).default;
+    } catch (error) {
+      if (stillOpen()) {
+        detailsOpen = false;
+        relayStore.showToast(error instanceof AppReloadHeld ? error.message : 'Session details could not be loaded. Try again or reload the app.', true);
+      }
+    } finally {
+      sessionDetailsLoading = false;
+    }
+  }
+
   function openAgent(agent: Agent) {
     if (relayStore.deviceCredential(agent.relay_id)?.role !== 'reader') {
       void relayStore.acknowledgePane(agent);
@@ -623,7 +654,7 @@
           size="icon"
           aria-label="Find in terminal"
           title="Find in terminal"
-          disabled={!activeAgent}
+          disabled={!activeAgent || !terminalView}
           onclick={() => terminalView?.openFind()}
         >
           <svg class="header-symbol" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" focusable="false">
@@ -635,7 +666,7 @@
           size="icon"
           aria-label="Conversation history"
           disabled={!conversationHistoryAvailable || !activeAgent}
-          title={conversationHistoryAvailable ? 'Conversation history' : 'Conversation history is unavailable for this agent'}
+          title={conversationHistoryAvailable ? 'Conversation' : 'Conversation is unavailable for this agent'}
           onclick={() => { if (activeAgent) replaceView({ view: 'history', paneId: activeAgent.pane_id, target: targetRefForAgent(activeAgent) || undefined }); }}
         >
           <svg class="header-symbol" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
@@ -741,6 +772,7 @@
           readOnly={activeReadOnly}
           frame={$frames.get(activeAgent.pane_id)}
           responding={$responding}
+          ondetails={openSessionDetails}
           onInitialPage={openingRoute.fallbackToTerminalOnInitialUnavailable
             ? makeInitialPageHandler(openingRoute)
             : undefined}
@@ -769,7 +801,18 @@
     {#key activeAgent.pane_id}
       <div class="terminal-layout">
         <AgentRail agents={$agents} active={activeAgent} onopen={openAgent} onjump={() => { jumpOpen = true; }} />
-        <TerminalView bind:this={terminalView} agent={activeAgent} allAgents={$agents} frame={$frames.get(activeAgent.pane_id)} responding={$responding} readOnly={activeReadOnly} />
+        {#await importOrReload(() => import('$components/TerminalView.svelte'), () => get(currentView).view === 'terminal')}
+          <main class="page terminal-loading" aria-label="Opening terminal">
+            <p role="status">Opening terminal...</p>
+          </main>
+        {:then { default: TerminalView }}
+          <TerminalView bind:this={terminalView} agent={activeAgent} allAgents={$agents} frame={$frames.get(activeAgent.pane_id)} responding={$responding} readOnly={activeReadOnly} ondetails={openSessionDetails} />
+        {:catch error}
+          <main class="page terminal-loading" aria-label="Terminal failed to load">
+            <p role="alert">{error instanceof AppReloadHeld ? error.message : 'Terminal could not be loaded. Reload the app to try again.'}</p>
+            <Button onclick={() => replaceView({ view: 'agents' })}>Back to agents</Button>
+          </main>
+        {/await}
       </div>
     {/key}
   {:else if $currentView.view === 'terminal'}
@@ -797,6 +840,10 @@
 
 <UpdateProgressDialog {readOnlyRelayIds} />
 <ManageDialog bind:open={manageOpen} agent={activeAgent} readOnly={activeReadOnly} />
+{#if sessionDetailsComponent}
+  {@const SessionDetails = sessionDetailsComponent}
+  <SessionDetails bind:open={detailsOpen} agent={activeAgent} returnFocus={detailsTrigger} />
+{/if}
 <GlobalJump bind:open={jumpOpen} agents={$agents} onselect={openAgent} />
 <WorkspaceInspector bind:open={workspaceOpen} agent={activeAgent} />
 <LockScreen />

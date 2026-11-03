@@ -48,6 +48,19 @@ export function hasConversationHistory(
   return Boolean(agent?.conversation_history_available === true && connection?.capabilities?.includes('conversation_history'));
 }
 
+export function isSessionlessOpenCode(agent: Agent | null): boolean {
+  return Boolean(agent && (agent.agent || '').toLowerCase().replace(/[ _-]/gu, '') === 'opencode'
+    && !agent.agent_session_id && targetRefForAgent(agent));
+}
+
+export function hasConversationView(
+  agent: Agent | null,
+  connection: Pick<RelayConnectionView, 'capabilities'> | null | undefined,
+): boolean {
+  return hasConversationHistory(agent, connection)
+    || Boolean(isSessionlessOpenCode(agent) && connection?.capabilities.includes('conversation_history'));
+}
+
 export function agentOpeningView(
   agent: Agent,
   connection: AgentViewConnection | null | undefined,
@@ -60,7 +73,8 @@ export function agentOpeningView(
     requested === 'conversation'
     && connection?.status === 'connected'
     && connection.inventory?.state === 'ready'
-    && hasConversationHistory(agent, connection)
+    && !connection.inventory.stale
+    && hasConversationView(agent, connection)
     && target
   ) {
     return {

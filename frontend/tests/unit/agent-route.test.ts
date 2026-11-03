@@ -139,6 +139,32 @@ describe('inferred Kimi history navigation', () => {
 });
 
 describe('initial native session discovery navigation', () => {
+  it('follows the exact sessionless OpenCode history target and preserves its fallback hook', () => {
+    const before = agent({ agent: 'opencode', conversation_history_available: false });
+    const agents = writable([before]);
+    const route = { view: 'history' as const, paneId: before.pane_id, target: targetRefForAgent(before)!, fallbackToTerminalOnInitialUnavailable: true as const };
+    replaceView(route);
+    stopFollowing = followInitialAgentSession(agents);
+    const push = vi.spyOn(history, 'pushState');
+    const after = { ...before, generation: 2, agent_session_id: 'native-session', conversation_history_available: true };
+    agents.set([after]);
+    expect(get(currentView)).toEqual({ ...route, target: targetRefForAgent(after) });
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    { terminal_id: 'replacement' }, { raw_pane_id: 'other-pane' },
+    { server_session_id: 'replacement' }, { generation: 3 },
+  ])('does not follow an OpenCode discovery with changed identity %j', (change) => {
+    const before = agent({ agent: 'opencode' });
+    const agents = writable([before]);
+    const route = { view: 'history' as const, paneId: before.pane_id, target: targetRefForAgent(before)! };
+    replaceView(route);
+    stopFollowing = followInitialAgentSession(agents);
+    agents.set([{ ...before, generation: 2, agent_session_id: 'native-session', ...change }]);
+    expect(get(currentView)).toEqual(route);
+  });
+
   it.each(['terminal', 'history'] as const)('refreshes an open %s route without adding history or authorizing the old target', (view) => {
     const before = agent();
     const agents = writable([before]);

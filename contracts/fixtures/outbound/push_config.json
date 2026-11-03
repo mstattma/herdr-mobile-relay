@@ -10,6 +10,8 @@
   "update": {"state": "current"},
   "app_deploy": {"state": "idle", "configured": false},
   "capabilities": [
+    "session_details",
+    "agent_cycle",
     "pi_integration",
     "attention_classification",
     "clear_activities",

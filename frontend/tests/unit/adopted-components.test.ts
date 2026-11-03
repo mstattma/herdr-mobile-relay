@@ -91,6 +91,7 @@ describe('adopted navigation and terminal controls', () => {
       tab_id: 'tab-1',
       tab_label: 'Review',
       cwd: '/home/dev/code/app',
+      session_name: 'Review changes',
     });
     const blocked = agent({
       raw_pane_id: 'pane-2',
@@ -133,26 +134,29 @@ describe('adopted navigation and terminal controls', () => {
     expect(card.querySelector('summary .workspace-card-title .host-badge')).toHaveTextContent('@Laptop');
     expect(card.querySelector('summary .path-row')).toHaveTextContent('~/code/app');
     // A working session opens its card, so the agent row is already visible.
-    expect(card.querySelector('.compact-agent-card .agent-path')).toHaveTextContent('~/code/app');
+    const review = screen.getByRole('button', { name: 'Open Review changes on Laptop' });
+    expect(review.querySelector('strong.agent-project')).toHaveTextContent('Review changes');
+    expect(review.querySelector('.overview-agent-path')).toHaveTextContent('~/code/app');
     expect(card.querySelector('.compact-agent-card .host-badge')).toBeNull();
     // An agent that reports no directory keeps its name, still without the
     // computer its card already names.
     const nameOnly = card.querySelector('.workspace-tab[aria-label="No directory tab"] .agent-project')!;
-    expect(nameOnly).toHaveTextContent('mobile');
+    expect(nameOnly).toHaveTextContent('No directory');
     expect(nameOnly.querySelector('.host-badge')).toBeNull();
     // The computer stays in the accessible name even where the row drops it.
-    expect(screen.getAllByRole('button', { name: 'Open mobile on Laptop' })).toHaveLength(2);
+    expect(screen.getByRole('button', { name: 'Open Review changes on Laptop' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Open No directory on Laptop' })).toBeInTheDocument();
 
     // A directory outside the relay's home directory keeps its absolute path.
     const outside = screen.getByText('srv-docs', { selector: 'summary strong' }).closest('details')!;
     expect(outside.querySelector('summary .path-row')).toHaveTextContent('/srv/docs');
-    expect(outside.querySelector('.compact-agent-card .agent-path')).toHaveTextContent('/srv/docs');
+    expect(outside.querySelector('.compact-agent-card .overview-agent-path')).toHaveTextContent('/srv/docs');
 
     // Agents needing input are listed outside any workspace card, so their
     // rows still have to name the computer.
     const attention = screen.getByRole('heading', { name: 'Needs input' }).closest('section')!;
     expect(attention.querySelector('.host-badge')).toHaveTextContent('@Laptop');
-    expect(attention.querySelector('.agent-path')).toBeNull();
+    expect(attention.querySelector('.overview-agent-path')).toHaveTextContent('/srv/docs');
   });
 
   it('sends a detected terminal menu action through the serialized key path', async () => {

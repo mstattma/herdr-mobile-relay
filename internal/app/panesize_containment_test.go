@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/0cv/herdr-mobile-relay/internal/coordinator"
 	"github.com/0cv/herdr-mobile-relay/internal/herdr"
 	"github.com/0cv/herdr-mobile-relay/internal/panesize"
 	"github.com/0cv/herdr-mobile-relay/internal/protocol"
@@ -272,6 +273,21 @@ func TestPaneSizeCommandsOnAllIngresses(t *testing.T) {
 			}
 			if _, size, writes := fakes.snapshot(); size.Columns != 120 || size.Rows != 40 || writes != 2 {
 				t.Fatalf("immediate release: size=%+v writes=%d", size, writes)
+			}
+
+			s.state.CommitInventory([]*coordinator.AgentState{{PaneID: "pane-1", Agent: "opencode", Status: "working"}}, s.state.RevisionCounter())
+			beforeLookups, beforeSize, beforeWrites := fakes.snapshot()
+			for range 2 {
+				result := exchange(map[string]any{"type": "lease_pane_size", "columns": 80, "rows": 24, "opt_in": true})
+				if result["ok"] != false || result["error"] != "Session resizing is unavailable for OpenCode" {
+					t.Fatalf("OpenCode lease was not rejected: %v", result)
+				}
+			}
+			if lookups, size, writes := fakes.snapshot(); lookups != beforeLookups || size != beforeSize || writes != beforeWrites {
+				t.Fatalf("OpenCode lease reached the backend: lookups=%d writes=%d size=%+v", lookups, writes, size)
+			}
+			if result := exchange(map[string]any{"type": "release_pane_size", "immediate": true}); result["ok"] != true {
+				t.Fatalf("OpenCode cleanup release: %v", result)
 			}
 		})
 	}

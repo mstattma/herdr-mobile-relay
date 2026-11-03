@@ -930,7 +930,7 @@ describe('accessible Svelte interactions', () => {
     });
     const headings = screen.getAllByRole('heading', { level: 3 }).map((heading) => heading.textContent);
     expect(headings).toEqual(['First', 'Second']);
-    const cards = screen.getAllByRole('button', { name: 'Open relay on Fedora' });
+    const cards = screen.getAllByRole('button', { name: /^Open (First|Second) on Fedora$/ });
     await fireEvent.keyDown(cards[0], { key: 'ArrowDown', altKey: true });
     expect(reorder).toHaveBeenCalledWith(first, 2);
     // The new arrangement shows immediately, before the relay confirms.

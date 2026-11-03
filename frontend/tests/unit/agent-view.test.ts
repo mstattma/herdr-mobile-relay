@@ -3,6 +3,7 @@ import {
   agentOpeningView,
   effectiveAgentView,
   hasConversationHistory,
+  hasConversationView,
   isAgentView,
   paneViewPreferenceKey,
   parsePaneViewPreferenceKey,
@@ -169,5 +170,21 @@ describe('agent view policy', () => {
     });
     const history = agentOpeningView(current, connection(), 'conversation', {});
     expect(history).toHaveProperty('fallbackToTerminalOnInitialUnavailable', true);
+  });
+
+  it('opens a sessionless OpenCode start view without claiming history exists', () => {
+    const current = agent({ agent: 'OpenCode', agent_session_id: '', conversation_history_available: false });
+    expect(hasConversationHistory(current, connection())).toBe(false);
+    expect(hasConversationView(current, connection())).toBe(true);
+    expect(agentOpeningView(current, connection(), 'conversation', {})).toMatchObject({
+      view: 'history', fallbackToTerminalOnInitialUnavailable: true,
+      target: { terminal_id: current.terminal_id, generation: 1 },
+    });
+    expect(agentOpeningView(current, connection(), 'terminal', {})).toMatchObject({ view: 'terminal' });
+    expect(hasConversationView({ ...current, agent_session_id: 'existing' }, connection())).toBe(false);
+    expect(hasConversationView({ ...current, agent: 'codex' }, connection())).toBe(false);
+    expect(hasConversationView({ ...current, terminal_id: '' }, connection())).toBe(false);
+    expect(hasConversationView(current, connection({ capabilities: [] }))).toBe(false);
+    expect(agentOpeningView(current, connection({ inventory: { ...connection().inventory, stale: true } }), 'conversation', {})).toMatchObject({ view: 'terminal' });
   });
 });
