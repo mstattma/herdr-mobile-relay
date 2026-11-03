@@ -1,23 +1,23 @@
 {
   "schema": 1,
   "version": "0.24.0",
-  "assets": 485005,
-  "build": "178555154f9d7f71b5b34728db602274f11d471f3d19766c37e256b55f03afa0",
-  "entry": "/builds/0.24.0-485005-178555154f9d7f71/index.html",
+  "assets": 485006,
+  "build": "0be25ec6b0f27487c5f16c38f01f571062da162d228c9a612e278198fae9aab4",
+  "entry": "/builds/0.24.0-485006-0be25ec6b0f27487/index.html",
   "files": {
     "entry": {
-      "path": "builds/0.24.0-485005-178555154f9d7f71/index.html",
-      "sha256": "de582b007b053240948b01dfc8688ba0fc30fb40135762dc0c547079b1840621",
-      "integrity": "sha256-3lgrAHsFMkCUiwHfyGiLoPww+0ATV2LcDFRwebGEBiE=",
-      "brotli_sha256": "c8481ac9c0ad30dc0a9c08d6b0c27806554891368d4b2b4e3b9495a6e4846f56",
-      "brotli_integrity": "sha256-yEgaycCtMNwKnAjWsMJ4BlVIkTaNSytOO5SVpuSEb1Y="
+      "path": "builds/0.24.0-485006-0be25ec6b0f27487/index.html",
+      "sha256": "8d997859c4aa7be30db3705bccb5b75264fb976a5cbbd027797468c502cc7a46",
+      "integrity": "sha256-jZl4WcSqe+MNs3BbzLW3UmT7l2pcu9AneXRoxQLMekY=",
+      "brotli_sha256": "e5af9e3c8940b26badcd2d80c5a292dd7bab70d8e03ab1520b240eda99385e2d",
+      "brotli_integrity": "sha256-5a+ePIlAsmutzS2AxaKS3XurcNjgOrFSCyQO2pk4Xi0="
     },
     "javascript": {
-      "path": "assets/app-66f91e439dc2dee55e65a6900dcb48f489c0e8b8a9fb6d966b7eade500b5da8c.js",
-      "sha256": "66f91e439dc2dee55e65a6900dcb48f489c0e8b8a9fb6d966b7eade500b5da8c",
-      "integrity": "sha256-ZvkeQ53C3uVeZaaQDctI9InA6Lip+22Wa36t5QC12ow=",
-      "brotli_sha256": "82cfaa3703e9e6310fd37902866249f03d23b4b872e5d20c409cbc3bbbe84b26",
-      "brotli_integrity": "sha256-gs+qNwPp5jEP03kChmJJ8D0jtLhy5dIMQJy8O7voSyY="
+      "path": "assets/app-a608c5ba8b25147a03b60e721114b9e39311f876fdcaad1c198f6aa02582dcb0.js",
+      "sha256": "a608c5ba8b25147a03b60e721114b9e39311f876fdcaad1c198f6aa02582dcb0",
+      "integrity": "sha256-pgjFuoslFHoDtg5yERS545MR+Hb9yq0cGY9qoCWC3LA=",
+      "brotli_sha256": "3c6eb90524ff4c091e7acfced6b3c97857e79388e6cd412c9b39ea4b219d5327",
+      "brotli_integrity": "sha256-PG65BST/TAkees/O1rPJeFfnk4jmzUEsmznqSyGdUyc="
     },
     "stylesheet": {
       "path": "assets/app-23661fb2d6368f849af0bc6cf775987320675b8fa7eb1f8e0290b23f04924307.css",
