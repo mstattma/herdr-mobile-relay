@@ -7,9 +7,9 @@ branch meant for upstream.
 
 ## Branches
 
-- `mst` is the integration branch: the latest upstream release tag plus our
-  commits, rebased onto each new upstream release. Fork releases are tagged on
-  `mst` as `vX.Y.Z+mst.N`.
+- `mst` is the integration branch: merge each upstream release tag while
+  retaining our commits, without rewriting published history or force-pushing.
+  Fork releases are tagged on `mst` as `vX.Y.Z+mst.N`.
 - Each change meant for upstream also lives on its own topic branch based on
   `upstream/dev`, without fork-only commits (this file, version scheme, asset
   counter offsets).

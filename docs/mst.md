@@ -1,9 +1,10 @@
 # Fork Builds
 
-`mst` is based on upstream **v0.24.0**. Our release is **0.24.0+mst.7**.
+`mst` includes upstream **v0.25.0**. Our release is **0.25.0+mst.1**.
 Build metadata does not affect version ordering, so the Settings page still
 announces newer upstream releases. Installing one replaces our patches;
 there are no automatic installs. Builds are local for now, not GitHub releases.
+The release workflow runs only in the upstream repository, not for fork tags.
 
 ## Changes
 
@@ -20,6 +21,23 @@ there are no automatic installs. Builds are local for now, not GitHub releases.
   remains the mobile-friendly transcript; Terminal shows the current grid and
   supports horizontal scrolling rather than reflowing sidebar columns.
 
+## Backend Scope
+
+Our deployment stays on `HERDR_RELAY_BACKEND=herdr` (the existing TUI server).
+Upgrading the relay does not enable herdr-core, create a second service, install
+agent hooks, or change device pairing. Core is a separate opt-in deployment.
+
+Keep upstream's backend-derived capabilities when porting. OpenCode's resize
+restriction applies to the TUI ioctl path; a core relay may advertise
+`pane_size_coordinated` for its native attachment-based resizing. The phone
+requires that explicit capability before resizing OpenCode and preserves the
+physical grid either way. Core resizing is covered by mocked dispatch tests,
+not by the TUI deployment's live acceptance test.
+
+Native Clear/Restart can now recreate desktop-started agents using their launch
+profile; original command-line options are not retained. The private pinned
+OpenCode launcher remains a host configuration, outside this public fork.
+
 Changes are tested here before asking the owner to approve upstream PRs. No
 upstream PR or issue is submitted automatically. See `AGENTS.mst.md`.
 
@@ -34,7 +52,7 @@ bun install --frozen-lockfile --cwd frontend
 make frontend-check
 bun frontend/scripts/release.mjs
 HERDR_RELEASE_TARGETS=linux/amd64 \
-  sh scripts/package-release.sh 0.24.0+mst.7 "$(git rev-parse HEAD)" dist/release
+  sh scripts/package-release.sh 0.25.0+mst.1 "$(git rev-parse HEAD)" dist/release
 ```
 
 `HERDR_RELEASE_TARGETS` can select a host target for a local build; omit it to

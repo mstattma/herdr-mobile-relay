@@ -12,6 +12,7 @@ permissions:
 jobs:
   verify:
     name: Require successful check workflow
+    if: github.repository == '0cv/herdr-mobile-relay'
     runs-on: ubuntu-latest
     steps:
       - name: Require successful check workflow

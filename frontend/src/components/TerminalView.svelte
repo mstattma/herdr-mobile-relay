@@ -201,19 +201,22 @@
   const inspectionMode = $derived(agentNeedsInspection(agent));
   const interaction = $derived(questionInteraction(agent));
   const questionMode = $derived(Boolean(!readOnly && responsePending && attentionKind(agent) === 'question' && interaction));
-  // A TTY-only lease cannot resize Herdr's full-screen grid.
+  // OpenCode always renders a fixed grid, even with coordinated resizing.
   const strictGrid = $derived(agent.agent?.trim().toLowerCase() === 'opencode');
+  const coordinatedResize = $derived(Boolean(
+    $connections.get(agent.relay_id)?.capabilities.includes('pane_size_coordinated'),
+  ));
   // Resize Session needs three things: this device opted in, it controls the
   // relay, and the relay advertises the opt-in capability. The legacy
   // pane_size_lease name is ignored: a relay offering only that resizes on any
-  // lease, with no opt-in check.
+  // lease, with no opt-in check. OpenCode also needs coordinated grid/PTY resizing.
   const resizeSessionActive = $derived(
-    Boolean(!strictGrid && $terminalResizeSession
+    Boolean((!strictGrid || coordinatedResize) && $terminalResizeSession
       && !readOnly && $connections.get(agent.relay_id)?.capabilities.includes('pane_size_opt_in')),
   );
   // The capability only says the relay can lease; it does not mean this pane
   // has a width yet. The wrapping layout is engaged solely when it does.
-  const resizeLayoutActive = $derived(terminalResizeLayoutEngaged(
+  const resizeLayoutActive = $derived(!strictGrid && terminalResizeLayoutEngaged(
     resizeSessionActive,
     measuredCellWidth,
     lastLeasedColumns || renderedResizeColumns,
@@ -1567,7 +1570,7 @@
   {/if}
   <div class:hidden={questionMode} class="terminal-view term">
   {#if strictGrid}
-    <p class="upload-status">Fixed terminal layout; scroll sideways. Session resizing is unavailable for OpenCode.</p>
+    <p class="upload-status">Fixed terminal layout; scroll sideways.{#if !coordinatedResize} Session resizing is unavailable for OpenCode.{/if}</p>
   {/if}
   {#if findOpen}
     <section class="terminal-find" aria-label="Find in terminal">

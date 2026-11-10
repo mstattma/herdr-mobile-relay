@@ -118,7 +118,7 @@ func TestPaneSizeCapabilitiesAreOptInOnly(t *testing.T) {
 		t.Fatalf("production backend available = %v on %s", s.paneSizeM.Available(), runtime.GOOS)
 	}
 	for range 2 { // initial and subsequent capability snapshots
-		caps := s.effectiveCapabilitiesFor(herdr.ServerStatus{})
+		caps := s.effectiveCapabilitiesFor(s.herdrC.CapabilityStatus())
 		for _, legacy := range []string{"pane_size_lease", "pane_size_lease_rows"} {
 			if slices.Contains(caps, legacy) {
 				t.Fatalf("advertised legacy %s", legacy)
@@ -143,14 +143,48 @@ func TestPaneSizeCapabilitiesAreOptInOnly(t *testing.T) {
 	}
 }
 
+func TestPaneSizeCoordinatedCapabilityRequiresAvailableCore(t *testing.T) {
+	for _, backend := range []string{"herdr", "hc", ""} {
+		t.Run(backend, func(t *testing.T) {
+			s := testServer()
+			s.cfg.Backend = backend
+			for _, available := range []bool{false, true} {
+				s.paneSizeM = panesize.NewManager(nil, nil)
+				if available {
+					newPaneSizeFakes(s)
+				}
+				caps := s.effectiveCapabilitiesFor(herdr.ServerStatus{})
+				if got, want := slices.Contains(caps, protocol.PaneSizeCoordinatedCapability), backend == "hc" && available; got != want {
+					t.Fatalf("coordinated capability = %v, want %v (available=%v)", got, want, available)
+				}
+				for _, optIn := range []string{protocol.PaneSizeOptInCapability, protocol.PaneSizeOptInRowsCapability} {
+					if slices.Contains(caps, optIn) != available {
+						t.Fatalf("%s advertised incorrectly (available=%v)", optIn, available)
+					}
+				}
+			}
+		})
+	}
+}
+
 // Every ingress reaches the same ordered handler. A lease without opt_in is
 // refused before any Herdr, process or TTY access (an older app that leases
 // automatically); an opt-in lease reaches the manager; release completes,
 // immediately when asked to.
 func TestPaneSizeCommandsOnAllIngresses(t *testing.T) {
-	for _, path := range []string{transport.TransportWebSocket, transport.TransportGateway, transport.TransportWebRTC} {
-		t.Run(path, func(t *testing.T) {
+	for _, tc := range []struct{ backend, path string }{
+		{"herdr", transport.TransportWebSocket},
+		{"herdr", transport.TransportGateway},
+		{"herdr", transport.TransportWebRTC},
+		{"hc", transport.TransportWebSocket},
+		{"hc", transport.TransportGateway},
+		{"hc", transport.TransportWebRTC},
+	} {
+		t.Run(tc.backend+"/"+tc.path, func(t *testing.T) {
 			s := testServer()
+			s.cfg.Backend = tc.backend
+			path := tc.path
+			// Test dispatch with the fake manager for both backends, never a core daemon.
 			fakes := newPaneSizeFakes(s)
 			// Run installs the production handler; this mirrors its ordering up
 			// to dispatch so the request still crosses action classification,
@@ -277,14 +311,30 @@ func TestPaneSizeCommandsOnAllIngresses(t *testing.T) {
 
 			s.state.CommitInventory([]*coordinator.AgentState{{PaneID: "pane-1", Agent: "opencode", Status: "working"}}, s.state.RevisionCounter())
 			beforeLookups, beforeSize, beforeWrites := fakes.snapshot()
-			for range 2 {
-				result := exchange(map[string]any{"type": "lease_pane_size", "columns": 80, "rows": 24, "opt_in": true})
-				if result["ok"] != false || result["error"] != "Session resizing is unavailable for OpenCode" {
-					t.Fatalf("OpenCode lease was not rejected: %v", result)
-				}
+			if result := exchange(map[string]any{"type": "lease_pane_size", "columns": 80, "rows": 24}); result["ok"] != false {
+				t.Fatalf("OpenCode lease without opt_in: %v", result)
 			}
 			if lookups, size, writes := fakes.snapshot(); lookups != beforeLookups || size != beforeSize || writes != beforeWrites {
-				t.Fatalf("OpenCode lease reached the backend: lookups=%d writes=%d size=%+v", lookups, writes, size)
+				t.Fatalf("OpenCode lease without opt_in reached the backend: lookups=%d writes=%d size=%+v", lookups, writes, size)
+			}
+			for range 2 {
+				result := exchange(map[string]any{"type": "lease_pane_size", "columns": 80, "rows": 24, "opt_in": true})
+				if tc.backend == "hc" {
+					data, _ := result["data"].(map[string]any)
+					if result["ok"] != true || data["columns"] != float64(80) || data["rows"] != float64(24) {
+						t.Fatalf("OpenCode coordinated lease: %v", result)
+					}
+				} else if result["ok"] != false || result["error"] != "Session resizing is unavailable for OpenCode" {
+					t.Fatalf("OpenCode TUI lease was not rejected: %v", result)
+				}
+			}
+			lookups, size, writes := fakes.snapshot()
+			if tc.backend == "hc" {
+				if lookups <= beforeLookups || size.Columns != 80 || size.Rows != 24 || writes != beforeWrites+1 {
+					t.Fatalf("OpenCode coordinated lease did not reach the backend: lookups=%d writes=%d size=%+v", lookups, writes, size)
+				}
+			} else if lookups != beforeLookups || size != beforeSize || writes != beforeWrites {
+				t.Fatalf("OpenCode TUI lease reached the backend: lookups=%d writes=%d size=%+v", lookups, writes, size)
 			}
 			if result := exchange(map[string]any{"type": "release_pane_size", "immediate": true}); result["ok"] != true {
 				t.Fatalf("OpenCode cleanup release: %v", result)
