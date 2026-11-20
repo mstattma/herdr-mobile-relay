@@ -320,3 +320,66 @@ func TestOpenCodeWrappedQuestionKeepsEveryRow(t *testing.T) {
 		t.Fatalf("interaction = %+v", interaction)
 	}
 }
+
+func TestOpenCodeQuestionExcludesSidebar(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		gap  int
+	}{
+		{"no sidebar", -1},
+		{"short gap", 2},
+		{"wide gap", 30},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			screen := func(sidebar string) string {
+				row := func(background, text, side string) string {
+					line := ocMargin + ocBorder + ocText(background, "  "+text)
+					if tc.gap >= 0 {
+						line += ocText(ocPanel, strings.Repeat(" ", tc.gap)) + ocMargin + ocText(ocPanel, "  "+side)
+					}
+					return line + ocReset
+				}
+				return strings.Join([]string{
+					row(ocPanel, "Scope  Confirm", sidebar),
+					row(ocPanel, "", sidebar),
+					row(ocPanel, "Should we test a bounded set of layouts", sidebar),
+					row(ocPanel, "or require support for every configuration?", "Usage 37%"),
+					row(ocPanel, "", sidebar),
+					row(ocMenu, "1. Tested layouts", sidebar),
+					row(ocPanel, "Validate a defined range of sizes", "Todo"),
+					row(ocPanel, "and reading settings.", sidebar),
+					row(ocPanel, "", sidebar),
+					row(ocPanel, "2. Every configuration", sidebar),
+					row(ocPanel, "Discuss the broader scope first.", "Todo"),
+					row(ocPanel, "3. Type your own answer", sidebar),
+					row(ocPanel, "", sidebar),
+					row(ocPanel, "↑↓ select  enter confirm  esc dismiss", sidebar),
+				}, "\n")
+			}
+			first := Classify(screen("Example account"), "opencode")
+			if first.Kind != AttentionQuestion || first.Interaction == nil {
+				t.Fatalf("classification = %+v", first)
+			}
+			interaction := first.Interaction
+			if want := "Should we test a bounded set of layouts or require support for every configuration?"; interaction.Question != want {
+				t.Fatalf("question = %q, want %q", interaction.Question, want)
+			}
+			wantOptions := []Option{
+				{Index: 0, Label: "Tested layouts", Description: "Validate a defined range of sizes and reading settings."},
+				{Index: 1, Label: "Every configuration", Description: "Discuss the broader scope first."},
+			}
+			if !reflect.DeepEqual(interaction.Options, wantOptions) {
+				t.Fatalf("options = %+v, want %+v", interaction.Options, wantOptions)
+			}
+			if interaction.Other.Text != "" || interaction.Other.Label != "Type your own answer" ||
+				interaction.Focus != (Focus{Kind: "option", Index: 0}) ||
+				interaction.QuestionIndex != 1 || interaction.QuestionTotal != 1 {
+				t.Fatalf("interaction = %+v", interaction)
+			}
+			updated := Classify(screen("Another account: usage 63%"), "opencode")
+			if !reflect.DeepEqual(updated.Interaction, interaction) {
+				t.Fatalf("sidebar update changed the question: before=%+v after=%+v", interaction, updated.Interaction)
+			}
+		})
+	}
+}

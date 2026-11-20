@@ -31,6 +31,8 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Keep OpenCode sidebar text out of questions and answer descriptions when
+  wrapped dialog text leaves only a narrow gap before the sidebar.
 - Keep OpenCode's TUI resize protection while allowing explicitly advertised
   coordinated core resizing, without wrapping the physical screen grid.
 - Align Session details with the top of the Conversation/Full history toggle,

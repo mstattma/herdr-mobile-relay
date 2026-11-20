@@ -1704,19 +1704,9 @@ func openCodeActiveTab(raw string) string {
 }
 
 func cleanOpenCodeLine(line string) string {
-	line = strings.TrimRight(
-		ansiPattern.ReplaceAllString(strings.ReplaceAll(line, "\r", ""), ""),
-		" \t",
-	)
-	trimmed := strings.TrimLeft(line, " \t")
-	if !strings.HasPrefix(trimmed, "┃") {
-		return ""
-	}
-	trimmed = strings.TrimPrefix(trimmed, "┃")
-	if gap := openCodeColumnPattern.FindStringIndex(trimmed); gap != nil {
-		trimmed = trimmed[:gap[0]]
-	}
-	return strings.TrimSpace(trimmed)
+	// Preserve background boundaries until the sidebar has been removed.
+	text, _ := openCodeDialogLine(line)
+	return text
 }
 
 func cleanLines(text string) []string {

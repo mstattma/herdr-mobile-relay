@@ -1,6 +1,6 @@
 # Fork Builds
 
-`mst` includes upstream **v0.25.0**. Our release is **0.25.0+mst.1**.
+`mst` includes upstream **v0.25.0**. Our release is **0.25.0+mst.2**.
 Build metadata does not affect version ordering, so the Settings page still
 announces newer upstream releases. Installing one replaces our patches;
 there are no automatic installs. Builds are local for now, not GitHub releases.
@@ -52,7 +52,7 @@ bun install --frozen-lockfile --cwd frontend
 make frontend-check
 bun frontend/scripts/release.mjs
 HERDR_RELEASE_TARGETS=linux/amd64 \
-  sh scripts/package-release.sh 0.25.0+mst.1 "$(git rev-parse HEAD)" dist/release
+  sh scripts/package-release.sh 0.25.0+mst.2 "$(git rev-parse HEAD)" dist/release
 ```
 
 `HERDR_RELEASE_TARGETS` can select a host target for a local build; omit it to
